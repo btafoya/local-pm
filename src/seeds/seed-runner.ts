@@ -24,6 +24,7 @@ interface SeedTicket {
   projectPrefix: string
   teamName: string | null
   labels: { name: string; color: string }[]
+  blockedByTitles?: string[]
 }
 
 const SEED_PROJECTS: SeedProject[] = [
@@ -35,7 +36,7 @@ const SEED_PROJECTS: SeedProject[] = [
     status: ProjectStatus.ACTIVE,
   },
   {
-    name: 'Mobile App',
+    name: 'Mobile App v2',
     prefix: 'APP',
     color: '#8b5cf6',
     icon: 'zap',
@@ -48,146 +49,199 @@ const SEED_PROJECTS: SeedProject[] = [
     icon: 'database',
     status: ProjectStatus.ACTIVE,
   },
+  {
+    name: 'Marketing Campaign 2024',
+    prefix: 'MKT',
+    color: '#eab308',
+    icon: 'flag',
+    status: ProjectStatus.ACTIVE,
+  },
+  {
+    name: 'Cloud Infrastructure',
+    prefix: 'OPS',
+    color: '#06b6d4',
+    icon: 'layers',
+    status: ProjectStatus.ACTIVE,
+  },
+  {
+    name: 'Customer Support Portal',
+    prefix: 'CSP',
+    color: '#ec4899',
+    icon: 'briefcase',
+    status: ProjectStatus.ACTIVE,
+  },
 ]
 
 const SEED_TEAMS: SeedTeam[] = [
   {
-    name: 'Engineering',
-    description: null,
+    name: 'Frontend Engineering',
+    description: 'Web and mobile client development',
     color: '#3b82f6',
   },
   {
-    name: 'QA',
-    description: null,
+    name: 'Backend Engineering',
+    description: 'API and Database management',
+    color: '#10b981',
+  },
+  {
+    name: 'QA & Testing',
+    description: 'Quality assurance and automated testing',
     color: '#f97316',
   },
   {
     name: 'Design',
-    description: null,
+    description: 'UI/UX and Brand design',
     color: '#ec4899',
   },
   {
-    name: 'Product',
-    description: null,
+    name: 'Product Management',
+    description: 'Product strategy and roadmap',
+    color: '#8b5cf6',
+  },
+  {
+    name: 'Marketing',
+    description: 'Growth and branding',
+    color: '#f59e0b',
+  },
+  {
+    name: 'DevOps',
+    description: 'Infrastructure and CI/CD',
+    color: '#06b6d4',
+  },
+  {
+    name: 'Customer Success',
+    description: 'Support and user happiness',
     color: '#14b8a6',
   },
 ]
 
 const SEED_TICKETS: SeedTicket[] = [
-  // Website Redesign tickets
+  // Website Redesign (WEB)
   {
-    title: 'Design new homepage layout',
+    title: 'Finalize new brand guidelines',
     status: TicketStatus.DONE,
     priority: TicketPriority.HIGH,
     projectPrefix: 'WEB',
     teamName: 'Design',
     labels: [{ name: 'design', color: '#ec4899' }],
+  },
+  {
+    title: 'Design homepage wireframes',
+    status: TicketStatus.DONE,
+    priority: TicketPriority.HIGH,
+    projectPrefix: 'WEB',
+    teamName: 'Design',
+    labels: [{ name: 'design', color: '#ec4899' }],
+    blockedByTitles: ['Finalize new brand guidelines'],
   },
   {
     title: 'Implement responsive navigation',
     status: TicketStatus.IN_PROGRESS,
-    priority: TicketPriority.HIGH,
-    projectPrefix: 'WEB',
-    teamName: 'Engineering',
-    labels: [{ name: 'frontend', color: '#3b82f6' }],
-  },
-  {
-    title: 'Create color palette and typography system',
-    status: TicketStatus.DONE,
     priority: TicketPriority.MEDIUM,
     projectPrefix: 'WEB',
+    teamName: 'Frontend Engineering',
+    labels: [{ name: 'frontend', color: '#3b82f6' }],
+    blockedByTitles: ['Design homepage wireframes'],
+  },
+  {
+    title: 'Hero section implementation',
+    status: TicketStatus.TODO,
+    priority: TicketPriority.MEDIUM,
+    projectPrefix: 'WEB',
+    teamName: 'Frontend Engineering',
+    labels: [{ name: 'frontend', color: '#3b82f6' }],
+    blockedByTitles: ['Design homepage wireframes'],
+  },
+
+  // Mobile App v2 (APP)
+  {
+    title: 'Define API contract for Auth',
+    status: TicketStatus.DONE,
+    priority: TicketPriority.URGENT,
+    projectPrefix: 'APP',
+    teamName: 'Product Management',
+    labels: [{ name: 'planning', color: '#64748b' }],
+  },
+  {
+    title: 'Audit current React Native performance',
+    status: TicketStatus.DONE,
+    priority: TicketPriority.MEDIUM,
+    projectPrefix: 'APP',
+    teamName: 'QA & Testing',
+    labels: [{ name: 'qa', color: '#f97316' }],
+  },
+  {
+    title: 'Implement OAuth logic',
+    status: TicketStatus.IN_PROGRESS,
+    priority: TicketPriority.HIGH,
+    projectPrefix: 'APP',
+    teamName: 'Backend Engineering',
+    labels: [{ name: 'auth', color: '#ef4444' }, { name: 'api', color: '#10b981' }],
+    blockedByTitles: ['Define API contract for Auth'],
+  },
+  {
+    title: 'Biometric authentication integration',
+    status: TicketStatus.TODO,
+    priority: TicketPriority.MEDIUM,
+    projectPrefix: 'APP',
+    teamName: 'Frontend Engineering',
+    labels: [{ name: 'mobile', color: '#8b5cf6' }],
+    blockedByTitles: ['Implement OAuth logic'],
+  },
+
+  // Marketing (MKT)
+  {
+    title: 'Identify target audience for Q1',
+    status: TicketStatus.DONE,
+    priority: TicketPriority.HIGH,
+    projectPrefix: 'MKT',
+    teamName: 'Marketing',
+    labels: [{ name: 'strategy', color: '#f59e0b' }],
+  },
+  {
+    title: 'Create social media assets',
+    status: TicketStatus.IN_PROGRESS,
+    priority: TicketPriority.MEDIUM,
+    projectPrefix: 'MKT',
     teamName: 'Design',
     labels: [{ name: 'design', color: '#ec4899' }],
+    blockedByTitles: ['Identify target audience for Q1'],
   },
   {
-    title: 'Build hero section component',
+    title: 'Setup ad campaigns on LinkedIn',
     status: TicketStatus.TODO,
-    priority: TicketPriority.MEDIUM,
-    projectPrefix: 'WEB',
-    teamName: 'Engineering',
-    labels: [{ name: 'frontend', color: '#3b82f6' }],
+    priority: TicketPriority.HIGH,
+    projectPrefix: 'MKT',
+    teamName: 'Marketing',
+    labels: [{ name: 'ads', color: '#3b82f6' }],
+    blockedByTitles: ['Create social media assets'],
+  },
+
+  // DevOps (OPS)
+  {
+    title: 'Migrate DB to new cluster',
+    status: TicketStatus.IN_PROGRESS,
+    priority: TicketPriority.URGENT,
+    projectPrefix: 'OPS',
+    teamName: 'DevOps',
+    labels: [{ name: 'infrastructure', color: '#06b6d4' }],
   },
   {
-    title: 'Setup analytics tracking',
+    title: 'Optimize Docker build times',
     status: TicketStatus.TODO,
     priority: TicketPriority.LOW,
-    projectPrefix: 'WEB',
-    teamName: null,
-    labels: [],
-  },
-  // Mobile App tickets
-  {
-    title: 'Setup React Native project',
-    status: TicketStatus.DONE,
-    priority: TicketPriority.URGENT,
-    projectPrefix: 'APP',
-    teamName: 'Engineering',
-    labels: [{ name: 'setup', color: '#22c55e' }],
+    projectPrefix: 'OPS',
+    teamName: 'DevOps',
+    labels: [{ name: 'ci/cd', color: '#8b5cf6' }],
   },
   {
-    title: 'Design app navigation flow',
-    status: TicketStatus.IN_PROGRESS,
-    priority: TicketPriority.HIGH,
-    projectPrefix: 'APP',
-    teamName: 'Design',
-    labels: [{ name: 'design', color: '#ec4899' }, { name: 'ux', color: '#a855f7' }],
-  },
-  {
-    title: 'Implement authentication screens',
-    status: TicketStatus.TODO,
-    priority: TicketPriority.HIGH,
-    projectPrefix: 'APP',
-    teamName: 'Engineering',
-    labels: [{ name: 'auth', color: '#ef4444' }],
-  },
-  {
-    title: 'Create push notification service',
+    title: 'Implement auto-scaling for API',
     status: TicketStatus.TODO,
     priority: TicketPriority.MEDIUM,
-    projectPrefix: 'APP',
-    teamName: 'Engineering',
-    labels: [{ name: 'backend', color: '#14b8a6' }],
-  },
-  // Backend API tickets
-  {
-    title: 'Setup database schema',
-    status: TicketStatus.DONE,
-    priority: TicketPriority.URGENT,
-    projectPrefix: 'API',
-    teamName: 'Engineering',
-    labels: [{ name: 'database', color: '#f97316' }],
-  },
-  {
-    title: 'Implement user authentication endpoints',
-    status: TicketStatus.DONE,
-    priority: TicketPriority.HIGH,
-    projectPrefix: 'API',
-    teamName: 'Engineering',
-    labels: [{ name: 'auth', color: '#ef4444' }, { name: 'api', color: '#6366f1' }],
-  },
-  {
-    title: 'Create REST API documentation',
-    status: TicketStatus.IN_PROGRESS,
-    priority: TicketPriority.MEDIUM,
-    projectPrefix: 'API',
-    teamName: null,
-    labels: [{ name: 'docs', color: '#64748b' }],
-  },
-  {
-    title: 'Add rate limiting middleware',
-    status: TicketStatus.TODO,
-    priority: TicketPriority.MEDIUM,
-    projectPrefix: 'API',
-    teamName: 'Engineering',
-    labels: [{ name: 'security', color: '#ef4444' }],
-  },
-  {
-    title: 'Setup CI/CD pipeline',
-    status: TicketStatus.TODO,
-    priority: TicketPriority.LOW,
-    projectPrefix: 'API',
-    teamName: null,
-    labels: [{ name: 'devops', color: '#8b5cf6' }],
+    projectPrefix: 'OPS',
+    teamName: 'DevOps',
+    labels: [{ name: 'reliability', color: '#10b981' }],
+    blockedByTitles: ['Migrate DB to new cluster'],
   },
 ]
 
@@ -224,8 +278,10 @@ async function seed() {
     projectMap.set(project.prefix, created.id)
   }
 
-  // Create tickets
-  console.log('Creating tickets...')
+  // Create tickets (first pass)
+  console.log('Creating tickets (first pass)...')
+  const ticketMap = new Map<string, string>()
+
   for (const ticket of SEED_TICKETS) {
     const projectId = projectMap.get(ticket.projectPrefix)
     const teamId = ticket.teamName ? teamMap.get(ticket.teamName) : null
@@ -235,7 +291,7 @@ async function seed() {
       continue
     }
 
-    await payload.create({
+    const created = await payload.create({
       collection: 'tickets',
       data: {
         title: ticket.title,
@@ -246,6 +302,33 @@ async function seed() {
         labels: ticket.labels,
       },
     })
+
+    // Store in map so we can reference for blockedBy
+    // Using title as key (assume unique titles in seed data for simplicity)
+    ticketMap.set(ticket.title, created.id)
+  }
+
+  // Second pass: link dependencies
+  console.log('Linking dependencies...')
+  for (const ticket of SEED_TICKETS) {
+    if (ticket.blockedByTitles && ticket.blockedByTitles.length > 0) {
+      const ticketId = ticketMap.get(ticket.title)
+      if (!ticketId) continue
+
+      const blockedByIDs = ticket.blockedByTitles
+        .map(title => ticketMap.get(title))
+        .filter((id): id is string => !!id)
+
+      if (blockedByIDs.length > 0) {
+        await payload.update({
+          collection: 'tickets',
+          id: ticketId,
+          data: {
+            blockedBy: blockedByIDs,
+          },
+        })
+      }
+    }
   }
 
   console.log('Seed completed!')
@@ -253,6 +336,9 @@ async function seed() {
 }
 
 seed().catch((error) => {
-  console.error('Seed failed:', error)
+  console.error('Seed failed:', JSON.stringify(error, null, 2))
+  if (error.data && error.data.errors) {
+    console.error('Validation errors:', JSON.stringify(error.data.errors, null, 2))
+  }
   process.exit(1)
 })

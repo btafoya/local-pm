@@ -67,6 +67,9 @@ export const PROJECT_ICONS = [
   'box',
   'layers',
   'database',
+  'megaphone',
+  'cloud',
+  'users',
 ]
 
 export const PROJECT_COLORS = [
@@ -77,6 +80,7 @@ export const PROJECT_COLORS = [
   '#ec4899', // Pink
   '#ef4444', // Red
   '#f97316', // Orange
+  '#f59e0b', // Amber/Yellow
   '#eab308', // Yellow
   '#22c55e', // Green
   '#14b8a6', // Teal
