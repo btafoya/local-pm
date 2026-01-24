@@ -1,0 +1,804 @@
+#!/usr/bin/env node
+
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  Tool,
+} from '@modelcontextprotocol/sdk/types.js';
+
+const BASE_URL = process.env.LOCAL_PM_URL || 'http://localhost:3010';
+
+// Status mapping (MCP uses lowercase for readability, Payload uses uppercase)
+const STATUS_MAP: Record<string, string> = {
+  active: 'ACTIVE',
+  on_hold: 'ON_HOLD',
+  completed: 'COMPLETED',
+  cancelled: 'CANCELLED',
+  todo: 'TODO',
+  in_progress: 'IN_PROGRESS',
+  done: 'DONE',
+  no_priority: 'NO_PRIORITY',
+  urgent: 'URGENT',
+  high: 'HIGH',
+  medium: 'MEDIUM',
+  low: 'LOW',
+};
+
+function toPayloadValue(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  return STATUS_MAP[value] || value;
+}
+
+// Helper function to make API requests
+async function apiRequest(
+  endpoint: string,
+  method: string = 'GET',
+  body?: unknown
+): Promise<unknown> {
+  const url = `${BASE_URL}/api${endpoint}`;
+  const options: RequestInit = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  };
+
+  if (body) {
+    options.body = JSON.stringify(body);
+  }
+
+  const response = await fetch(url, options);
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`API request failed: ${response.status} - ${error}`);
+  }
+
+  return response.json();
+}
+
+// Define all tools
+const tools: Tool[] = [
+  // ============== PROJECTS ==============
+  {
+    name: 'list_projects',
+    description: 'List all projects in Local PM. Returns project name, prefix, status, color, icon, and ticket count.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          description: 'Filter by status: active, on_hold, completed, cancelled',
+          enum: ['active', 'on_hold', 'completed', 'cancelled'],
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of projects to return (default: 100)',
+        },
+      },
+    },
+  },
+  {
+    name: 'get_project',
+    description: 'Get detailed information about a specific project by ID',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'The project ID',
+        },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'create_project',
+    description: 'Create a new project in Local PM',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Project name',
+        },
+        prefix: {
+          type: 'string',
+          description: 'Project prefix (2-6 uppercase letters, used for ticket IDs like PROJ-1)',
+        },
+        description: {
+          type: 'string',
+          description: 'Project description (supports HTML for rich text)',
+        },
+        status: {
+          type: 'string',
+          description: 'Project status',
+          enum: ['active', 'on_hold', 'completed', 'cancelled'],
+          default: 'active',
+        },
+        icon: {
+          type: 'string',
+          description: 'Icon name: folder, rocket, zap, star, heart, flag, target, briefcase, code, box, layers, database',
+          default: 'folder',
+        },
+        color: {
+          type: 'string',
+          description: 'Hex color code (e.g., #6366f1)',
+          default: '#6366f1',
+        },
+      },
+      required: ['name', 'prefix'],
+    },
+  },
+  {
+    name: 'update_project',
+    description: 'Update an existing project',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'The project ID to update',
+        },
+        name: {
+          type: 'string',
+          description: 'New project name',
+        },
+        description: {
+          type: 'string',
+          description: 'New project description',
+        },
+        status: {
+          type: 'string',
+          description: 'New project status',
+          enum: ['active', 'on_hold', 'completed', 'cancelled'],
+        },
+        icon: {
+          type: 'string',
+          description: 'New icon name',
+        },
+        color: {
+          type: 'string',
+          description: 'New hex color code',
+        },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'delete_project',
+    description: 'Delete a project and optionally all its tickets',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'The project ID to delete',
+        },
+        deleteTickets: {
+          type: 'boolean',
+          description: 'Whether to delete all tickets in the project (default: true)',
+          default: true,
+        },
+      },
+      required: ['id'],
+    },
+  },
+
+  // ============== TEAMS ==============
+  {
+    name: 'list_teams',
+    description: 'List all teams in Local PM',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: {
+          type: 'number',
+          description: 'Maximum number of teams to return (default: 100)',
+        },
+      },
+    },
+  },
+  {
+    name: 'get_team',
+    description: 'Get detailed information about a specific team by ID',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'The team ID',
+        },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'create_team',
+    description: 'Create a new team in Local PM',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Team name',
+        },
+        description: {
+          type: 'string',
+          description: 'Team description (supports HTML for rich text)',
+        },
+        color: {
+          type: 'string',
+          description: 'Hex color code (e.g., #6366f1)',
+          default: '#6366f1',
+        },
+      },
+      required: ['name'],
+    },
+  },
+  {
+    name: 'update_team',
+    description: 'Update an existing team',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'The team ID to update',
+        },
+        name: {
+          type: 'string',
+          description: 'New team name',
+        },
+        description: {
+          type: 'string',
+          description: 'New team description',
+        },
+        color: {
+          type: 'string',
+          description: 'New hex color code',
+        },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'delete_team',
+    description: 'Delete a team (tickets assigned to this team will become unassigned)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'The team ID to delete',
+        },
+      },
+      required: ['id'],
+    },
+  },
+
+  // ============== TICKETS ==============
+  {
+    name: 'list_tickets',
+    description: 'List tickets in Local PM with optional filters',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: {
+          type: 'string',
+          description: 'Filter by project ID',
+        },
+        teamId: {
+          type: 'string',
+          description: 'Filter by team ID',
+        },
+        status: {
+          type: 'string',
+          description: 'Filter by status',
+          enum: ['todo', 'in_progress', 'done'],
+        },
+        priority: {
+          type: 'string',
+          description: 'Filter by priority',
+          enum: ['no_priority', 'urgent', 'high', 'medium', 'low'],
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of tickets to return (default: 100)',
+        },
+      },
+    },
+  },
+  {
+    name: 'get_ticket',
+    description: 'Get detailed information about a specific ticket by ID',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'The ticket ID',
+        },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'create_ticket',
+    description: 'Create a new ticket in Local PM',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: {
+          type: 'string',
+          description: 'Ticket title',
+        },
+        description: {
+          type: 'string',
+          description: 'Ticket description (supports HTML for rich text)',
+        },
+        project: {
+          type: 'string',
+          description: 'Project ID (required)',
+        },
+        team: {
+          type: 'string',
+          description: 'Team ID (optional)',
+        },
+        status: {
+          type: 'string',
+          description: 'Ticket status',
+          enum: ['todo', 'in_progress', 'done'],
+          default: 'todo',
+        },
+        priority: {
+          type: 'string',
+          description: 'Ticket priority',
+          enum: ['no_priority', 'urgent', 'high', 'medium', 'low'],
+          default: 'no_priority',
+        },
+        dueDate: {
+          type: 'string',
+          description: 'Due date in ISO format (YYYY-MM-DD)',
+        },
+        labels: {
+          type: 'array',
+          description: 'Array of labels with name and color',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              color: { type: 'string' },
+            },
+            required: ['name', 'color'],
+          },
+        },
+        subtasks: {
+          type: 'array',
+          description: 'Array of subtasks with title and completed status',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              completed: { type: 'boolean', default: false },
+            },
+            required: ['title'],
+          },
+        },
+        blockedBy: {
+          type: 'array',
+          description: 'Array of ticket IDs that block this ticket. The ticket cannot be worked on until all blocking tickets are done.',
+          items: {
+            type: 'string',
+          },
+        },
+      },
+      required: ['title', 'project'],
+    },
+  },
+  {
+    name: 'update_ticket',
+    description: 'Update an existing ticket',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'The ticket ID to update',
+        },
+        title: {
+          type: 'string',
+          description: 'New ticket title',
+        },
+        description: {
+          type: 'string',
+          description: 'New ticket description',
+        },
+        team: {
+          type: 'string',
+          description: 'New team ID (use null to unassign)',
+        },
+        status: {
+          type: 'string',
+          description: 'New ticket status',
+          enum: ['todo', 'in_progress', 'done'],
+        },
+        priority: {
+          type: 'string',
+          description: 'New ticket priority',
+          enum: ['no_priority', 'urgent', 'high', 'medium', 'low'],
+        },
+        dueDate: {
+          type: 'string',
+          description: 'New due date in ISO format (use null to clear)',
+        },
+        labels: {
+          type: 'array',
+          description: 'New array of labels (replaces existing)',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              color: { type: 'string' },
+            },
+            required: ['name', 'color'],
+          },
+        },
+        subtasks: {
+          type: 'array',
+          description: 'New array of subtasks (replaces existing)',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              completed: { type: 'boolean' },
+            },
+            required: ['title'],
+          },
+        },
+        blockedBy: {
+          type: 'array',
+          description: 'Array of ticket IDs that block this ticket (replaces existing). Use empty array to clear.',
+          items: {
+            type: 'string',
+          },
+        },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'move_ticket',
+    description: 'Move a ticket to a different status (column on the Kanban board)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'The ticket ID to move',
+        },
+        status: {
+          type: 'string',
+          description: 'New status',
+          enum: ['todo', 'in_progress', 'done'],
+        },
+      },
+      required: ['id', 'status'],
+    },
+  },
+  {
+    name: 'delete_ticket',
+    description: 'Delete a ticket',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'The ticket ID to delete',
+        },
+      },
+      required: ['id'],
+    },
+  },
+
+  // ============== BOARD ==============
+  {
+    name: 'get_board',
+    description: 'Get the full Kanban board with tickets grouped by status. Optionally filter by project or team.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: {
+          type: 'string',
+          description: 'Filter by project ID',
+        },
+        teamId: {
+          type: 'string',
+          description: 'Filter by team ID',
+        },
+      },
+    },
+  },
+
+  // ============== SUBTASKS ==============
+  {
+    name: 'toggle_subtask',
+    description: 'Toggle a subtask completion status',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticketId: {
+          type: 'string',
+          description: 'The ticket ID containing the subtask',
+        },
+        subtaskIndex: {
+          type: 'number',
+          description: 'The index of the subtask to toggle (0-based)',
+        },
+      },
+      required: ['ticketId', 'subtaskIndex'],
+    },
+  },
+  {
+    name: 'add_subtask',
+    description: 'Add a subtask to a ticket',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticketId: {
+          type: 'string',
+          description: 'The ticket ID to add subtask to',
+        },
+        title: {
+          type: 'string',
+          description: 'Subtask title',
+        },
+      },
+      required: ['ticketId', 'title'],
+    },
+  },
+];
+
+// Tool handlers
+async function handleToolCall(
+  name: string,
+  args: Record<string, unknown>
+): Promise<unknown> {
+  switch (name) {
+    // Projects
+    case 'list_projects': {
+      let query = `?limit=${args.limit || 100}&depth=0`;
+      if (args.status) {
+        query += `&where[status][equals]=${toPayloadValue(args.status as string)}`;
+      }
+      return apiRequest(`/projects${query}`);
+    }
+    case 'get_project': {
+      return apiRequest(`/projects/${args.id}?depth=1`);
+    }
+    case 'create_project': {
+      return apiRequest('/projects', 'POST', {
+        name: args.name,
+        prefix: (args.prefix as string).toUpperCase(),
+        description: args.description || null,
+        status: toPayloadValue(args.status as string) || 'ACTIVE',
+        icon: args.icon || 'folder',
+        color: args.color || '#6366f1',
+      });
+    }
+    case 'update_project': {
+      const id = args.id;
+      const updates: Record<string, unknown> = {};
+      if (args.name) updates.name = args.name;
+      if (args.description !== undefined) updates.description = args.description;
+      if (args.status) updates.status = toPayloadValue(args.status as string);
+      if (args.icon) updates.icon = args.icon;
+      if (args.color) updates.color = args.color;
+      return apiRequest(`/projects/${id}`, 'PATCH', updates);
+    }
+    case 'delete_project': {
+      const { id, deleteTickets = true } = args;
+      if (deleteTickets) {
+        // First get all tickets for this project
+        const ticketsResponse = await apiRequest(
+          `/tickets?where[project][equals]=${id}&limit=1000`
+        ) as { docs: Array<{ id: string }> };
+        // Delete each ticket
+        for (const ticket of ticketsResponse.docs || []) {
+          await apiRequest(`/tickets/${ticket.id}`, 'DELETE');
+        }
+      }
+      return apiRequest(`/projects/${id}`, 'DELETE');
+    }
+
+    // Teams
+    case 'list_teams': {
+      const query = `?limit=${args.limit || 100}&depth=0`;
+      return apiRequest(`/teams${query}`);
+    }
+    case 'get_team': {
+      return apiRequest(`/teams/${args.id}?depth=1`);
+    }
+    case 'create_team': {
+      return apiRequest('/teams', 'POST', {
+        name: args.name,
+        description: args.description || null,
+        color: args.color || '#6366f1',
+      });
+    }
+    case 'update_team': {
+      const { id, ...updates } = args;
+      return apiRequest(`/teams/${id}`, 'PATCH', updates);
+    }
+    case 'delete_team': {
+      return apiRequest(`/teams/${args.id}`, 'DELETE');
+    }
+
+    // Tickets
+    case 'list_tickets': {
+      let query = `?limit=${args.limit || 100}&depth=1`;
+      if (args.projectId) {
+        query += `&where[project][equals]=${args.projectId}`;
+      }
+      if (args.teamId) {
+        query += `&where[team][equals]=${args.teamId}`;
+      }
+      if (args.status) {
+        query += `&where[status][equals]=${toPayloadValue(args.status as string)}`;
+      }
+      if (args.priority) {
+        query += `&where[priority][equals]=${toPayloadValue(args.priority as string)}`;
+      }
+      return apiRequest(`/tickets${query}`);
+    }
+    case 'get_ticket': {
+      return apiRequest(`/tickets/${args.id}?depth=1`);
+    }
+    case 'create_ticket': {
+      return apiRequest('/tickets', 'POST', {
+        title: args.title,
+        description: args.description || null,
+        project: args.project,
+        team: args.team || null,
+        status: toPayloadValue(args.status as string) || 'TODO',
+        priority: toPayloadValue(args.priority as string) || 'NO_PRIORITY',
+        dueDate: args.dueDate || null,
+        labels: args.labels || [],
+        subtasks: args.subtasks || [],
+        blockedBy: args.blockedBy || [],
+      });
+    }
+    case 'update_ticket': {
+      const id = args.id;
+      const updates: Record<string, unknown> = {};
+      if (args.title) updates.title = args.title;
+      if (args.description !== undefined) updates.description = args.description;
+      if (args.team !== undefined) updates.team = args.team;
+      if (args.status) updates.status = toPayloadValue(args.status as string);
+      if (args.priority) updates.priority = toPayloadValue(args.priority as string);
+      if (args.dueDate !== undefined) updates.dueDate = args.dueDate;
+      if (args.labels) updates.labels = args.labels;
+      if (args.subtasks) updates.subtasks = args.subtasks;
+      if (args.blockedBy !== undefined) updates.blockedBy = args.blockedBy;
+      return apiRequest(`/tickets/${id}`, 'PATCH', updates);
+    }
+    case 'move_ticket': {
+      return apiRequest(`/tickets/${args.id}`, 'PATCH', {
+        status: toPayloadValue(args.status as string),
+      });
+    }
+    case 'delete_ticket': {
+      return apiRequest(`/tickets/${args.id}`, 'DELETE');
+    }
+
+    // Board
+    case 'get_board': {
+      let query = '?limit=1000&depth=1';
+      if (args.projectId) {
+        query += `&where[project][equals]=${args.projectId}`;
+      }
+      if (args.teamId) {
+        query += `&where[team][equals]=${args.teamId}`;
+      }
+      const response = await apiRequest(`/tickets${query}`) as { docs: Array<{ status: string }> };
+      const tickets = response.docs || [];
+
+      // Group by status
+      const board = {
+        todo: tickets.filter((t) => t.status === 'todo'),
+        in_progress: tickets.filter((t) => t.status === 'in_progress'),
+        done: tickets.filter((t) => t.status === 'done'),
+        summary: {
+          total: tickets.length,
+          todo: tickets.filter((t) => t.status === 'todo').length,
+          inProgress: tickets.filter((t) => t.status === 'in_progress').length,
+          done: tickets.filter((t) => t.status === 'done').length,
+        },
+      };
+      return board;
+    }
+
+    // Subtasks
+    case 'toggle_subtask': {
+      const ticket = await apiRequest(`/tickets/${args.ticketId}`) as {
+        subtasks?: Array<{ title: string; completed: boolean }>
+      };
+      const subtasks = ticket.subtasks || [];
+      const index = args.subtaskIndex as number;
+
+      if (index < 0 || index >= subtasks.length) {
+        throw new Error(`Subtask index ${index} out of range`);
+      }
+
+      subtasks[index].completed = !subtasks[index].completed;
+      return apiRequest(`/tickets/${args.ticketId}`, 'PATCH', { subtasks });
+    }
+    case 'add_subtask': {
+      const ticket = await apiRequest(`/tickets/${args.ticketId}`) as {
+        subtasks?: Array<{ title: string; completed: boolean }>
+      };
+      const subtasks = ticket.subtasks || [];
+      subtasks.push({ title: args.title as string, completed: false });
+      return apiRequest(`/tickets/${args.ticketId}`, 'PATCH', { subtasks });
+    }
+
+    default:
+      throw new Error(`Unknown tool: ${name}`);
+  }
+}
+
+// Create and run server
+const server = new Server(
+  {
+    name: 'local-pm-mcp',
+    version: '1.0.0',
+  },
+  {
+    capabilities: {
+      tools: {},
+    },
+  }
+);
+
+// Register handlers
+server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  tools,
+}));
+
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+
+  try {
+    const result = await handleToolCall(name, args as Record<string, unknown>);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Error: ${errorMessage}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+});
+
+// Start server
+async function main() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error('Local PM MCP Server running on stdio');
+}
+
+main().catch(console.error);
