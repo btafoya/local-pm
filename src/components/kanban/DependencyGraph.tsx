@@ -123,9 +123,9 @@ export function DependencyGraph({ ticket, allTickets, onTicketClick }: Dependenc
 
   if (!hasGraph) {
     return (
-      <div className="flex flex-col items-center justify-center py-8 text-gray-500">
-        <Circle className="w-8 h-8 mb-2 opacity-50" />
-        <p className="text-sm">No dependencies for this ticket</p>
+      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground bg-secondary/10 rounded-xl border border-border/40 border-dashed">
+        <Circle className="w-10 h-10 mb-3 opacity-20" />
+        <p className="text-sm font-medium">No dependencies for this ticket</p>
       </div>
     )
   }
@@ -140,56 +140,56 @@ export function DependencyGraph({ ticket, allTickets, onTicketClick }: Dependenc
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'DONE': return { bg: '#22c55e', text: '#dcfce7', border: '#16a34a' }
-      case 'IN_PROGRESS': return { bg: '#3b82f6', text: '#dbeafe', border: '#2563eb' }
+      case 'IN_PROGRESS': return { bg: '#6366f1', text: '#e0e7ff', border: '#4f46e5' }
       default: return { bg: '#71717a', text: '#e4e4e7', border: '#52525b' }
     }
   }
 
   const getNodeBorderColor = (node: GraphNode) => {
-    if (node.type === 'current') return '#8b5cf6'
-    if (node.ticket.status === 'DONE') return '#22c55e'
-    return '#f59e0b'
+    if (node.type === 'current') return '#6366f1' // Primary
+    if (node.ticket.status === 'DONE') return '#22c55e' // Success
+    return '#f59e0b' // Warning/Amber
   }
 
   return (
-    <div className="relative">
+    <div className="relative group">
       {/* Zoom controls */}
-      <div className="absolute top-2 right-2 flex items-center gap-1 z-10 bg-[#27272a] rounded-md p-1">
+      <div className="absolute top-3 right-3 flex items-center gap-1 z-10 bg-card border border-border/50 rounded-lg p-1 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
         <button
           onClick={() => setZoom(z => Math.max(0.5, z - 0.1))}
-          className="p-1 hover:bg-[#3f3f46] rounded transition-colors"
+          className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"
           title="Zoom out"
         >
-          <ZoomOut className="w-4 h-4 text-gray-400" />
+          <ZoomOut className="w-4 h-4" />
         </button>
-        <span className="text-xs text-gray-400 px-2">{Math.round(zoom * 100)}%</span>
+        <span className="text-xs font-medium text-muted-foreground px-1 min-w-[32px] text-center">{Math.round(zoom * 100)}%</span>
         <button
           onClick={() => setZoom(z => Math.min(1.5, z + 0.1))}
-          className="p-1 hover:bg-[#3f3f46] rounded transition-colors"
+          className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"
           title="Zoom in"
         >
-          <ZoomIn className="w-4 h-4 text-gray-400" />
+          <ZoomIn className="w-4 h-4" />
         </button>
       </div>
 
       {/* Legend */}
-      <div className="absolute top-2 left-2 flex items-center gap-4 z-10 text-xs text-gray-400">
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded-full bg-amber-500" />
+      <div className="absolute top-3 left-3 flex items-center gap-4 z-10 text-xs font-medium text-muted-foreground bg-card/50 backdrop-blur-sm px-3 py-1.5 rounded-full border border-border/30">
+        <div className="flex items-center gap-1.5">
+          <div className="w-2 h-2 rounded-full bg-amber-500" />
           <span>Blocking</span>
         </div>
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded-full bg-violet-500" />
+        <div className="flex items-center gap-1.5">
+          <div className="w-2 h-2 rounded-full bg-primary" />
           <span>Current</span>
         </div>
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded-full bg-green-500" />
+        <div className="flex items-center gap-1.5">
+          <div className="w-2 h-2 rounded-full bg-emerald-500" />
           <span>Done</span>
         </div>
       </div>
 
       {/* Graph */}
-      <div className="overflow-auto max-h-[400px] mt-8 bg-[#0f0f10] rounded-lg border border-[#27272a]">
+      <div className="overflow-auto max-h-[400px] mt-2 bg-secondary/10 rounded-xl border border-border/40 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
         <svg
           width={maxX * zoom}
           height={maxY * zoom}
@@ -208,7 +208,7 @@ export function DependencyGraph({ ticket, allTickets, onTicketClick }: Dependenc
             >
               <polygon
                 points="0 0, 10 3.5, 0 7"
-                fill="#6b7280"
+                fill="#71717a"
               />
             </marker>
             <marker
@@ -243,7 +243,7 @@ export function DependencyGraph({ ticket, allTickets, onTicketClick }: Dependenc
                   d={`M ${fromX} ${fromY}
                       C ${fromX} ${midY}, ${toX} ${midY}, ${toX} ${toY - 10}`}
                   fill="none"
-                  stroke={isDone ? '#22c55e' : '#6b7280'}
+                  stroke={isDone ? '#22c55e' : '#52525b'}
                   strokeWidth="2"
                   strokeDasharray={isDone ? 'none' : '5,5'}
                   markerEnd={isDone ? 'url(#arrowhead-green)' : 'url(#arrowhead)'}
@@ -273,79 +273,75 @@ export function DependencyGraph({ ticket, allTickets, onTicketClick }: Dependenc
                   y="0"
                   width={nodeWidth}
                   height={nodeHeight}
-                  rx="8"
-                  fill="#1f1f23"
+                  rx="10"
+                  fill="#18181b"
                   stroke={borderColor}
-                  strokeWidth={node.type === 'current' ? '3' : '2'}
-                  className={isClickable ? 'hover:brightness-110 transition-all' : ''}
+                  strokeWidth={node.type === 'current' ? '2.5' : '1.5'}
+                  className={`${isClickable ? 'hover:brightness-110 transition-all' : ''} drop-shadow-lg`}
                 />
 
                 {/* Status indicator */}
                 <circle
                   cx="16"
                   cy={nodeHeight / 2}
-                  r="6"
+                  r="4"
                   fill={statusColors.bg}
                 />
                 {node.ticket.status === 'DONE' && (
                   <path
                     d="M13 30 L15 32 L19 28"
                     stroke="white"
-                    strokeWidth="2"
+                    strokeWidth="1.5"
                     fill="none"
-                    transform={`translate(0, ${nodeHeight / 2 - 30})`}
+                    transform={`translate(-1, ${nodeHeight / 2 - 30}) scale(0.9)`}
                   />
                 )}
 
                 {/* Ticket ID */}
                 <text
-                  x="30"
+                  x="28"
                   y="20"
-                  fontSize="11"
+                  fontSize="10"
                   fontWeight="600"
-                  fill={project?.color as string || '#888'}
+                  fill={project?.color as string || '#a1a1aa'}
+                  style={{ fontFamily: 'var(--font-inter), sans-serif' }}
                 >
                   {node.ticket.ticketId}
                 </text>
 
                 {/* Title (truncated) */}
                 <text
-                  x="30"
-                  y="38"
-                  fontSize="12"
-                  fill="#fff"
+                  x="28"
+                  y="36"
+                  fontSize="11"
+                  fill="#fafafa"
                   className="font-medium"
+                  style={{ fontFamily: 'var(--font-inter), sans-serif' }}
                 >
-                  {node.ticket.title.length > 18
-                    ? node.ticket.title.substring(0, 18) + '...'
+                  {node.ticket.title.length > 20
+                    ? node.ticket.title.substring(0, 19) + '...'
                     : node.ticket.title}
                 </text>
 
                 {/* Type indicator for current node */}
                 {node.type === 'current' && (
-                  <text
-                    x={nodeWidth - 10}
-                    y="15"
-                    fontSize="10"
-                    fill="#8b5cf6"
-                    textAnchor="end"
-                  >
-                    ★
-                  </text>
+                  <g transform={`translate(${nodeWidth - 18}, 10)`}>
+                    <circle r="3" fill="#6366f1" />
+                  </g>
                 )}
 
                 {/* Blocked indicator */}
                 {node.type === 'blocked' && node.ticket.status !== 'DONE' && (
-                  <g transform={`translate(${nodeWidth - 20}, ${nodeHeight - 18})`}>
+                  <g transform={`translate(${nodeWidth - 38}, ${nodeHeight - 16})`}>
                     <rect
-                      x="-2"
-                      y="-2"
-                      width="18"
-                      height="14"
+                      x="0"
+                      y="0"
+                      width="30"
+                      height="12"
                       rx="3"
                       fill="#f59e0b20"
                     />
-                    <text fontSize="8" fill="#f59e0b">
+                    <text x="15" y="8" fontSize="8" fill="#f59e0b" textAnchor="middle" dominantBaseline="middle">
                       blocked
                     </text>
                   </g>

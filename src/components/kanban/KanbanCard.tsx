@@ -15,197 +15,181 @@ interface KanbanCardProps {
 }
 
 export function KanbanCard({ ticket, isOverlay, onClick, onDelete }: KanbanCardProps) {
+  const {
+    setNodeRef,
+    attributes,
+    listeners,
+    transform,
+    transition,
+    isDragging: isSortableDragging,
+  } = useSortable({
+    id: ticket.id,
+    data: {
+      type: 'Ticket',
+      ticket,
+    },
+    disabled: isOverlay, // Disable sorting if we are in overlay mode
+  })
+
+  // State to manage hover and menu visibility
   const [showMenu, setShowMenu] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: ticket.id })
+  // Determine drag state
+  const isDragging = isOverlay || isSortableDragging
 
+  // Styling for the card during drag
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 1000 : 1,
   }
 
-  const project = typeof ticket.project === 'object' ? ticket.project : null
-  const team = typeof ticket.team === 'object' ? ticket.team : null
-  const priorityColor = PRIORITY_COLORS[ticket.priority as TicketPriority] || PRIORITY_COLORS[TicketPriority.NO_PRIORITY]
-
-  // Check if ticket is blocked by incomplete tickets
-  const blockingTickets = (ticket.blockedBy || [])
-    .map(t => typeof t === 'object' ? t : null)
-    .filter((t): t is Ticket => t !== null && t.status !== 'DONE')
-  const isBlocked = blockingTickets.length > 0
-
+  // Handle menu outside click
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setShowMenu(false)
       }
     }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  }
-
-  const handleCardClick = (e: React.MouseEvent) => {
-    // Only trigger click if not dragging and not clicking on menu
-    if (!isDragging && onClick) {
-      onClick()
+    if (showMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
     }
-  }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showMenu])
+
+  // Get project info
+  const project = typeof ticket.project === 'object' ? ticket.project : null
+  const labels = ticket.labels || []
+  const blockedCount = ticket.blockedBy?.length || 0
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
-      onClick={handleCardClick}
-      className={`group bg-[#1f1f23] border border-[#27272a] rounded-lg p-3 cursor-grab active:cursor-grabbing hover:border-[#3f3f46] transition-colors ${
-        isOverlay ? 'shadow-xl rotate-3' : ''
-      }`}
+      {...attributes} // Attach attributes to the card
+      className={`relative group bg-card hover:bg-card/80 border border-border/40 hover:border-border p-3.5 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 cursor-grab active:cursor-grabbing ${isOverlay ? 'shadow-2xl ring-2 ring-primary/20 rotate-2 cursor-grabbing' : ''
+        }`}
     >
-      {/* Header: ID and Menu */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          {project && (
-            <span
-              className="text-xs font-medium px-1.5 py-0.5 rounded"
-              style={{
-                backgroundColor: `${project.color}20`,
-                color: project.color as string,
-              }}
-            >
-              {ticket.ticketId}
-            </span>
-          )}
-          {!project && (
-            <span className="text-xs text-gray-500">{ticket.ticketId}</span>
-          )}
-          {isBlocked && (
-            <span
-              className="flex items-center gap-1 text-xs text-amber-500"
-              title={`Blocked by: ${blockingTickets.map(t => t.ticketId).join(', ')}`}
-            >
-              <Ban className="w-3 h-3" />
-            </span>
-          )}
+      {/* Menu Trigger (Visible on hover) */}
+      {!isOverlay && onDelete && (
+        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowMenu(!showMenu)
+            }}
+            className="p-1 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-md"
+          >
+            <MoreHorizontal className="w-4 h-4" />
+          </button>
         </div>
+      )}
 
-        {!isOverlay && (
-          <div className="relative" ref={menuRef}>
+      {/* Menu Dropdown */}
+      {showMenu && (
+        <div
+          ref={menuRef}
+          className="absolute top-8 right-3 z-20 w-32 bg-popover border border-border shadow-lg rounded-lg overflow-hidden animate-in fade-in zoom-in-95 duration-100"
+        >
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowMenu(false)
+              onClick?.()
+            }}
+            className="flex items-center gap-2 w-full px-3 py-2 text-xs text-foreground hover:bg-secondary/50 text-left"
+          >
+            <Eye className="w-3.5 h-3.5" /> View
+          </button>
+          {onDelete && (
             <button
               onClick={(e) => {
                 e.stopPropagation()
-                setShowMenu(!showMenu)
+                setShowMenu(false)
+                onDelete()
               }}
-              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-[#27272a] rounded transition-opacity"
+              className="flex items-center gap-2 w-full px-3 py-2 text-xs text-destructive hover:bg-destructive/10 text-left"
             >
-              <MoreHorizontal className="w-4 h-4 text-gray-400" />
+              <Trash2 className="w-3.5 h-3.5" /> Delete
             </button>
-
-            {showMenu && (
-              <div className="absolute right-0 top-full mt-1 bg-[#27272a] border border-[#3f3f46] rounded-md shadow-lg py-1 z-10 min-w-[120px]">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onClick?.()
-                    setShowMenu(false)
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-300 hover:bg-[#3f3f46] transition-colors"
-                >
-                  <Eye className="w-3 h-3" />
-                  View
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    if (confirm('Are you sure you want to delete this ticket?')) {
-                      onDelete?.()
-                    }
-                    setShowMenu(false)
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-400 hover:bg-[#3f3f46] transition-colors"
-                >
-                  <Trash2 className="w-3 h-3" />
-                  Delete
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Title */}
-      <h4 className="text-sm text-white font-medium mb-2 line-clamp-2">
-        {ticket.title}
-      </h4>
-
-      {/* Labels */}
-      {ticket.labels && ticket.labels.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-2">
-          {ticket.labels.slice(0, 3).map((label, index) => (
-            <span
-              key={index}
-              className="text-xs px-1.5 py-0.5 rounded"
-              style={{
-                backgroundColor: `${label.color}20`,
-                color: label.color as string,
-              }}
-            >
-              {label.name}
-            </span>
-          ))}
-          {ticket.labels.length > 3 && (
-            <span className="text-xs text-gray-500">
-              +{ticket.labels.length - 3}
-            </span>
           )}
         </div>
       )}
 
-      {/* Footer: Priority, Team, Due Date */}
-      <div className="flex items-center justify-between mt-2 pt-2 border-t border-[#27272a]">
-        <div className="flex items-center gap-2">
-          {/* Priority Indicator */}
-          <span
-            className="w-2 h-2 rounded-full"
-            style={{ backgroundColor: priorityColor }}
-            title={ticket.priority as string}
-          />
+      {/* Main Card Content - Drag Handle Area */}
+      <div
+        {...listeners}
+        onClick={onClick}
+        className="space-y-3"
+      >
+        {/* Header: Project Badge & Priority */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {project && (
+              <span
+                className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border"
+                style={{
+                  backgroundColor: `${project.color}15`,
+                  color: project.color as string,
+                  borderColor: `${project.color}30`
+                }}
+              >
+                {ticket.ticketId}
+              </span>
+            )}
+          </div>
 
-          {/* Team Badge */}
-          {team && (
-            <span
-              className="text-xs px-1.5 py-0.5 rounded"
-              style={{
-                backgroundColor: `${team.color}20`,
-                color: team.color as string,
-              }}
-            >
-              {team.name}
-            </span>
-          )}
+          {/* Priority Dot */}
+          <div
+            className="w-2 h-2 rounded-full ring-1 ring-background"
+            style={{ backgroundColor: PRIORITY_COLORS[ticket.priority as TicketPriority] || PRIORITY_COLORS[TicketPriority.NO_PRIORITY] }}
+            title={`Priority: ${ticket.priority}`}
+          />
         </div>
 
-        {/* Due Date */}
-        {ticket.dueDate && (
-          <div className="flex items-center gap-1 text-xs text-gray-500">
-            <Calendar className="w-3 h-3" />
-            {formatDate(ticket.dueDate)}
+        {/* Title */}
+        <h3 className="text-sm font-medium text-foreground leading-snug line-clamp-2 pr-4">{ticket.title}</h3>
+
+        {/* Metadata Row */}
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          {/* Labels & Date */}
+          <div className="flex items-center gap-3">
+            {labels.length > 0 && (
+              <div className="flex -space-x-1">
+                {labels.slice(0, 3).map((label, i) => (
+                  <div
+                    key={i}
+                    className="w-2 h-2 rounded-full ring-1 ring-card"
+                    style={{ backgroundColor: label.color as string }}
+                    title={label.name}
+                  />
+                ))}
+                {labels.length > 3 && (
+                  <span className="text-[10px] pl-1.5 text-muted-foreground">+{labels.length - 3}</span>
+                )}
+              </div>
+            )}
+
+            {ticket.dueDate && (
+              <div className="flex items-center gap-1">
+                <Calendar className="w-3 h-3" />
+                <span>{new Date(ticket.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+              </div>
+            )}
           </div>
-        )}
+
+          {/* Blocked Indicator */}
+          {blockedCount > 0 && (
+            <div className="flex items-center gap-1 text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded">
+              <Ban className="w-3 h-3" />
+              <span className="font-medium">{blockedCount}</span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -2,7 +2,7 @@
 
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import { Loader2, ChevronDown } from 'lucide-react'
+import { Loader2, ChevronDown, Plus } from 'lucide-react'
 import { KanbanCard } from './KanbanCard'
 import { TicketStatus, STATUS_COLORS } from '@/types/enums'
 import type { Ticket } from '@/payload-types'
@@ -18,7 +18,7 @@ interface KanbanColumnProps {
   title: string
   tickets: Ticket[]
   onViewTicket: (ticket: Ticket) => void
-  onDeleteTicket: (ticketId: string) => void
+  onDeleteTicket?: (ticketId: string) => void
   pagination?: ColumnPaginationInfo
   isLoadingMore?: boolean
   onLoadMore?: () => void
@@ -31,77 +31,75 @@ export function KanbanColumn({
   onViewTicket,
   onDeleteTicket,
   pagination,
-  isLoadingMore,
+  isLoadingMore = false,
   onLoadMore,
 }: KanbanColumnProps) {
-  const { setNodeRef, isOver } = useDroppable({ id })
+  const { setNodeRef } = useDroppable({
+    id,
+  })
 
-  const statusColor = STATUS_COLORS[id]
-  const remainingCount = pagination ? pagination.totalDocs - pagination.loadedCount : 0
+  // Get status color accent
+  const statusColor = STATUS_COLORS[id] || '#6366f1'
 
   return (
-    <div
-      ref={setNodeRef}
-      className={`flex flex-col w-80 min-w-[320px] bg-[#18181b] rounded-lg ${
-        isOver ? 'ring-2 ring-indigo-500' : ''
-      }`}
-    >
+    <div className="flex flex-col w-80 flex-shrink-0 max-h-full">
       {/* Column Header */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-[#27272a]">
-        <span
-          className="w-2 h-2 rounded-full"
-          style={{ backgroundColor: statusColor }}
-        />
-        <h3 className="text-sm font-medium text-white">{title}</h3>
-        <span className="ml-auto text-xs text-gray-500 bg-[#27272a] px-2 py-0.5 rounded">
-          {pagination ? `${pagination.loadedCount}/${pagination.totalDocs}` : tickets.length}
-        </span>
+      <div className="flex items-center justify-between mb-3 px-1">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor }} />
+          <h2 className="font-semibold text-sm text-foreground uppercase tracking-wide">{title}</h2>
+          <span className="ml-1 px-1.5 py-0.5 rounded-md bg-secondary/60 text-xs font-medium text-muted-foreground">
+            {pagination ? `${pagination.totalDocs}` : tickets.length}
+          </span>
+        </div>
       </div>
 
-      {/* Cards Container */}
-      <div className="flex-1 p-2 overflow-y-auto min-h-[200px]">
-        <SortableContext
-          items={tickets.map((t) => t.id)}
-          strategy={verticalListSortingStrategy}
-        >
-          <div className="space-y-2">
+      {/* Droppable Area */}
+      <div
+        ref={setNodeRef}
+        className="flex-1 overflow-y-auto bg-muted/10 rounded-xl px-2 py-2 border border-border/20 shadow-inner"
+      >
+        <div className="flex flex-col gap-3 min-h-[100px] p-1">
+          <SortableContext
+            items={tickets.map((t) => t.id)}
+            strategy={verticalListSortingStrategy}
+          >
             {tickets.map((ticket) => (
               <KanbanCard
                 key={ticket.id}
                 ticket={ticket}
                 onClick={() => onViewTicket(ticket)}
-                onDelete={() => onDeleteTicket(ticket.id)}
+                onDelete={onDeleteTicket ? () => onDeleteTicket(ticket.id) : undefined}
               />
             ))}
-          </div>
-        </SortableContext>
+          </SortableContext>
+        </div>
 
-        {tickets.length === 0 && !isLoadingMore && (
-          <div className="flex items-center justify-center h-20 text-sm text-gray-500">
-            No tickets
-          </div>
-        )}
-
-        {/* Load more button */}
-        {pagination?.hasNextPage && onLoadMore && (
-          <div className="mt-2 pt-2 border-t border-[#27272a]">
+        {/* Load More Trigger */}
+        {pagination?.hasNextPage && (
+          <div className="p-3 mt-2 flex justify-center">
             <button
               onClick={onLoadMore}
               disabled={isLoadingMore}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs text-gray-400 hover:text-white bg-[#27272a] hover:bg-[#3f3f46] rounded-md transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-all disabled:opacity-50"
             >
               {isLoadingMore ? (
-                <>
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  Loading...
-                </>
+                <Loader2 className="w-3 h-3 animate-spin" />
               ) : (
-                <>
-                  <ChevronDown className="w-3 h-3" />
-                  Load more ({remainingCount})
-                </>
+                <ChevronDown className="w-3 h-3" />
               )}
+              {isLoadingMore ? 'Loading...' : 'Load more'}
             </button>
+          </div>
+        )}
+
+        {/* Empty state hint */}
+        {!pagination?.hasNextPage && tickets.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-10 text-muted-foreground opacity-40">
+            <div className="w-12 h-12 rounded-full border-2 border-dashed border-current flex items-center justify-center mb-2">
+              <Plus className="w-5 h-5" />
+            </div>
+            <p className="text-xs font-medium">No tickets</p>
           </div>
         )}
       </div>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Plus, Trash2, CheckSquare, Square, Ban } from 'lucide-react'
+import { X, Plus, Trash2, CheckSquare, Square, Ban, Calendar, Tag, Users, FolderKanban, Minimize2 } from 'lucide-react'
 import { TicketStatus, TicketPriority, TICKET_STATUS_OPTIONS, TICKET_PRIORITY_OPTIONS } from '@/types/enums'
 import { RichTextEditor } from '@/components/ui/RichTextEditor'
 import type { Project, Team, Ticket } from '@/payload-types'
@@ -51,6 +51,7 @@ export function TicketModal({
   const [newLabelName, setNewLabelName] = useState('')
   const [newLabelColor, setNewLabelColor] = useState('#6366f1')
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
+  const [isFullScreen, setIsFullScreen] = useState(true)
 
   useEffect(() => {
     if (ticket) {
@@ -76,9 +77,9 @@ export function TicketModal({
       setBlockedByIds([])
       setDueDate('')
     }
+    setIsFullScreen(true)
   }, [ticket, defaultProjectId, isOpen])
 
-  // Available tickets for blocking (exclude self and already selected)
   const availableTickets = (allTickets || []).filter(t =>
     (!ticket || t.id !== ticket.id) && !blockedByIds.includes(t.id)
   )
@@ -167,335 +168,318 @@ export function TicketModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50"
-        onClick={onClose}
-      />
+    <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 ${isFullScreen ? '' : 'p-4 sm:p-6'}`}>
+      <div className="absolute inset-0" onClick={onClose} />
 
-      {/* Modal */}
-      <div className="relative bg-[#18181b] border border-[#27272a] rounded-lg w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+      <div
+        className={`relative flex flex-col bg-card shadow-2xl overflow-hidden transition-all duration-300 ${
+          isFullScreen
+            ? 'w-full h-full max-w-none rounded-none'
+            : 'w-full max-w-4xl mx-auto max-h-[90vh] rounded-xl border border-border/50'
+        }`}
+      >
         {/* Header */}
-        <div className="sticky top-0 bg-[#18181b] flex items-center justify-between px-6 py-4 border-b border-[#27272a] z-10">
-          <h2 className="text-lg font-semibold text-white">
-            {ticket ? 'Edit Ticket' : 'Create Ticket'}
-          </h2>
-          <button
-            onClick={onClose}
-            className="p-1 text-gray-400 hover:text-white transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+        <div className="flex-none flex items-center justify-between px-6 py-3 border-b border-border/30">
+          <span className="text-sm text-muted-foreground">
+            {ticket ? 'Edit Ticket' : 'New Ticket'}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setIsFullScreen(!isFullScreen)}
+              className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary/50 rounded-md transition-colors"
+            >
+              <Minimize2 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary/50 rounded-md transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* Title */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Title <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="What needs to be done?"
-              className="w-full bg-[#1f1f23] border border-[#27272a] rounded-md px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
-              required
-            />
-          </div>
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto">
+          <form id="ticket-form" onSubmit={handleSubmit} className={`${isFullScreen ? 'max-w-5xl mx-auto' : ''}`}>
+            <div className={`flex ${isFullScreen ? 'gap-0' : 'flex-col'}`}>
+              {/* Main Content */}
+              <div className={`flex-1 p-8 ${isFullScreen ? 'pr-0' : ''}`}>
+                {/* Title */}
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Untitled"
+                  className="w-full bg-transparent text-3xl font-bold text-foreground placeholder:text-muted-foreground/40 border-none px-0 py-2 focus:ring-0 focus:outline-none"
+                  autoFocus
+                  required
+                />
 
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Description
-            </label>
-            <RichTextEditor
-              value={description}
-              onChange={setDescription}
-              placeholder="Describe the task in detail..."
-            />
-          </div>
-
-          {/* Project & Team */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Project <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={projectId}
-                onChange={(e) => setProjectId(e.target.value)}
-                className="w-full bg-[#1f1f23] border border-[#27272a] rounded-md px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
-                required
-              >
-                <option value="">Select project</option>
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Team
-              </label>
-              <select
-                value={teamId}
-                onChange={(e) => setTeamId(e.target.value)}
-                className="w-full bg-[#1f1f23] border border-[#27272a] rounded-md px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
-              >
-                <option value="">No team</option>
-                {teams.map((team) => (
-                  <option key={team.id} value={team.id}>
-                    {team.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Status & Priority */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Status
-              </label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as TicketStatus)}
-                className="w-full bg-[#1f1f23] border border-[#27272a] rounded-md px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
-              >
-                {TICKET_STATUS_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Priority
-              </label>
-              <select
-                value={priority}
-                onChange={(e) => setPriority(e.target.value as TicketPriority)}
-                className="w-full bg-[#1f1f23] border border-[#27272a] rounded-md px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
-              >
-                {TICKET_PRIORITY_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Due Date */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Due Date
-            </label>
-            <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="w-full bg-[#1f1f23] border border-[#27272a] rounded-md px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-
-          {/* Subtasks */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Subtasks
-            </label>
-            <div className="space-y-2 mb-2">
-              {subtasks.map((subtask, index) => (
-                <div
-                  key={index}
-                  className="flex items-center gap-2 p-2 bg-[#1f1f23] border border-[#27272a] rounded-md"
-                >
-                  <button
-                    type="button"
-                    onClick={() => toggleSubtask(index)}
-                    className="text-gray-400 hover:text-white transition-colors"
-                  >
-                    {subtask.completed ? (
-                      <CheckSquare className="w-4 h-4 text-green-400" />
-                    ) : (
-                      <Square className="w-4 h-4" />
-                    )}
-                  </button>
-                  <span className={`flex-1 text-sm ${subtask.completed ? 'text-gray-500 line-through' : 'text-white'}`}>
-                    {subtask.title}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => removeSubtask(index)}
-                    className="text-gray-400 hover:text-red-400 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                {/* Description */}
+                <div className="mt-6">
+                  <RichTextEditor
+                    value={description}
+                    onChange={setDescription}
+                    placeholder="Add a description..."
+                  />
                 </div>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newSubtaskTitle}
-                onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addSubtask())}
-                placeholder="Add a subtask..."
-                className="flex-1 bg-[#1f1f23] border border-[#27272a] rounded-md px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
-              />
-              <button
-                type="button"
-                onClick={addSubtask}
-                className="p-2 bg-[#27272a] hover:bg-[#3f3f46] rounded-md transition-colors"
-              >
-                <Plus className="w-4 h-4 text-white" />
-              </button>
-            </div>
-          </div>
 
-          {/* Labels */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Labels
-            </label>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {labels.map((label, index) => (
-                <span
-                  key={index}
-                  className="flex items-center gap-1 text-xs px-2 py-1 rounded"
-                  style={{
-                    backgroundColor: `${label.color}20`,
-                    color: label.color,
-                  }}
-                >
-                  {label.name}
-                  <button
-                    type="button"
-                    onClick={() => removeLabel(index)}
-                    className="hover:opacity-70"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newLabelName}
-                onChange={(e) => setNewLabelName(e.target.value)}
-                placeholder="Label name"
-                className="flex-1 bg-[#1f1f23] border border-[#27272a] rounded-md px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
-              />
-              <input
-                type="color"
-                value={newLabelColor}
-                onChange={(e) => setNewLabelColor(e.target.value)}
-                className="w-10 h-8 bg-[#1f1f23] border border-[#27272a] rounded cursor-pointer"
-              />
-              <button
-                type="button"
-                onClick={addLabel}
-                className="p-2 bg-[#27272a] hover:bg-[#3f3f46] rounded-md transition-colors"
-              >
-                <Plus className="w-4 h-4 text-white" />
-              </button>
-            </div>
-          </div>
-
-          {/* Blocked By */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              <span className="flex items-center gap-1">
-                <Ban className="w-3 h-3" />
-                Blocked By
-              </span>
-            </label>
-            <div className="space-y-2 mb-2">
-              {blockedByIds.map((blockerId) => {
-                const blocker = (allTickets || []).find(t => t.id === blockerId)
-                if (!blocker) return null
-                const blockerProject = typeof blocker.project === 'object' ? blocker.project : null
-                return (
-                  <div
-                    key={blockerId}
-                    className="flex items-center gap-2 p-2 bg-[#1f1f23] border border-[#27272a] rounded-md"
-                  >
-                    <Ban className="w-4 h-4 text-amber-500" />
-                    <span
-                      className="text-xs font-medium px-1.5 py-0.5 rounded"
-                      style={{
-                        backgroundColor: blockerProject ? `${blockerProject.color}20` : '#27272a',
-                        color: blockerProject?.color as string || '#888',
-                      }}
-                    >
-                      {blocker.ticketId}
-                    </span>
-                    <span className={`flex-1 text-sm truncate ${blocker.status === 'DONE' ? 'text-gray-500 line-through' : 'text-white'}`}>
-                      {blocker.title}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeBlocker(blockerId)}
-                      className="text-gray-400 hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                {/* Subtasks */}
+                <div className="mt-8">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-medium text-muted-foreground">Subtasks</span>
+                    {subtasks.length > 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        {subtasks.filter(t => t.completed).length}/{subtasks.length}
+                      </span>
+                    )}
                   </div>
-                )
-              })}
-            </div>
-            {availableTickets.length > 0 && (
-              <select
-                onChange={(e) => {
-                  if (e.target.value) {
-                    addBlocker(e.target.value)
-                    e.target.value = ''
-                  }
-                }}
-                className="w-full bg-[#1f1f23] border border-[#27272a] rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                defaultValue=""
-              >
-                <option value="">Add a blocking ticket...</option>
-                {availableTickets.map((t) => {
-                  const tProject = typeof t.project === 'object' ? t.project : null
-                  return (
-                    <option key={t.id} value={t.id}>
-                      {t.ticketId} - {t.title} {tProject ? `(${tProject.name})` : ''}
-                    </option>
-                  )
-                })}
-              </select>
-            )}
-          </div>
 
-          {/* Actions */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-[#27272a]">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting || !title.trim() || !projectId}
-              className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? 'Saving...' : ticket ? 'Update' : 'Create'}
-            </button>
-          </div>
-        </form>
+                  <div className="space-y-1">
+                    {subtasks.map((subtask, index) => (
+                      <div
+                        key={index}
+                        className="group flex items-center gap-3 py-1.5 hover:bg-secondary/30 rounded-md px-2 -mx-2 transition-colors"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleSubtask(index)}
+                          className={`flex-none transition-colors ${subtask.completed ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                          {subtask.completed ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                        </button>
+                        <span className={`flex-1 text-sm ${subtask.completed ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
+                          {subtask.title}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeSubtask(index)}
+                          className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-destructive transition-all"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-2 mt-2">
+                    <Plus className="w-4 h-4 text-muted-foreground" />
+                    <input
+                      type="text"
+                      value={newSubtaskTitle}
+                      onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addSubtask())}
+                      placeholder="Add a subtask..."
+                      className="flex-1 bg-transparent border-none py-1 text-sm text-foreground placeholder-muted-foreground/50 focus:ring-0 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Sidebar */}
+              <div className={`${isFullScreen ? 'w-80 border-l border-border/30 p-6 bg-secondary/10' : 'p-8 pt-0'}`}>
+                <div className="space-y-5">
+                  {/* Project */}
+                  <div>
+                    <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2">
+                      <FolderKanban className="w-3.5 h-3.5" />
+                      Project
+                    </label>
+                    <select
+                      value={projectId}
+                      onChange={(e) => setProjectId(e.target.value)}
+                      className="w-full bg-transparent border-none text-sm text-foreground focus:ring-0 p-0 cursor-pointer hover:text-primary transition-colors"
+                      required
+                    >
+                      <option value="" className="bg-card">Select project</option>
+                      {projects.map((project) => (
+                        <option key={project.id} value={project.id} className="bg-card">
+                          {project.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Status */}
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-2 block">Status</label>
+                    <select
+                      value={status}
+                      onChange={(e) => setStatus(e.target.value as TicketStatus)}
+                      className="w-full bg-transparent border-none text-sm text-foreground focus:ring-0 p-0 cursor-pointer hover:text-primary transition-colors"
+                    >
+                      {TICKET_STATUS_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value} className="bg-card">
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Priority */}
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-2 block">Priority</label>
+                    <select
+                      value={priority}
+                      onChange={(e) => setPriority(e.target.value as TicketPriority)}
+                      className="w-full bg-transparent border-none text-sm text-foreground focus:ring-0 p-0 cursor-pointer hover:text-primary transition-colors"
+                    >
+                      {TICKET_PRIORITY_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value} className="bg-card">
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Team */}
+                  <div>
+                    <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2">
+                      <Users className="w-3.5 h-3.5" />
+                      Team
+                    </label>
+                    <select
+                      value={teamId}
+                      onChange={(e) => setTeamId(e.target.value)}
+                      className="w-full bg-transparent border-none text-sm text-foreground focus:ring-0 p-0 cursor-pointer hover:text-primary transition-colors"
+                    >
+                      <option value="" className="bg-card">No team</option>
+                      {teams.map((team) => (
+                        <option key={team.id} value={team.id} className="bg-card">
+                          {team.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Due Date */}
+                  <div>
+                    <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2">
+                      <Calendar className="w-3.5 h-3.5" />
+                      Due Date
+                    </label>
+                    <input
+                      type="date"
+                      value={dueDate}
+                      onChange={(e) => setDueDate(e.target.value)}
+                      className="w-full bg-transparent border-none text-sm text-foreground focus:ring-0 p-0 cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Labels */}
+                  <div>
+                    <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2">
+                      <Tag className="w-3.5 h-3.5" />
+                      Labels
+                    </label>
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {labels.map((label, index) => (
+                        <span
+                          key={index}
+                          className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
+                          style={{
+                            backgroundColor: `${label.color}20`,
+                            color: label.color,
+                          }}
+                        >
+                          {label.name}
+                          <button type="button" onClick={() => removeLabel(index)} className="hover:opacity-70">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={newLabelName}
+                        onChange={(e) => setNewLabelName(e.target.value)}
+                        placeholder="New label"
+                        className="flex-1 bg-secondary/50 border-none rounded px-2 py-1 text-xs text-foreground focus:ring-1 focus:ring-primary/30"
+                      />
+                      <input
+                        type="color"
+                        value={newLabelColor}
+                        onChange={(e) => setNewLabelColor(e.target.value)}
+                        className="w-7 h-7 p-0.5 bg-secondary/50 rounded cursor-pointer"
+                      />
+                      <button
+                        type="button"
+                        onClick={addLabel}
+                        disabled={!newLabelName.trim()}
+                        className="p-1.5 bg-secondary/50 text-muted-foreground hover:text-foreground rounded disabled:opacity-50 transition-colors"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Blocked By */}
+                  <div>
+                    <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2">
+                      <Ban className="w-3.5 h-3.5" />
+                      Blocked By
+                    </label>
+                    <div className="space-y-1.5 mb-2">
+                      {blockedByIds.map((blockerId) => {
+                        const blocker = (allTickets || []).find(t => t.id === blockerId)
+                        if (!blocker) return null
+                        return (
+                          <div key={blockerId} className="flex items-center gap-2 text-xs">
+                            <span className="text-muted-foreground">{blocker.ticketId}</span>
+                            <span className="flex-1 truncate text-foreground">{blocker.title}</span>
+                            <button type="button" onClick={() => removeBlocker(blockerId)} className="text-muted-foreground hover:text-destructive">
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    {availableTickets.length > 0 && (
+                      <select
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            addBlocker(e.target.value)
+                            e.target.value = ''
+                          }
+                        }}
+                        className="w-full bg-secondary/50 border-none rounded px-2 py-1.5 text-xs text-muted-foreground focus:ring-1 focus:ring-primary/30 cursor-pointer"
+                        defaultValue=""
+                      >
+                        <option value="">Add blocker...</option>
+                        {availableTickets.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.ticketId} - {t.title}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        {/* Footer */}
+        <div className="flex-none flex justify-end gap-3 px-6 py-4 border-t border-border/30">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="ticket-form"
+            disabled={isSubmitting || !title.trim() || !projectId}
+            className="px-5 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-md transition-all disabled:opacity-50"
+          >
+            {isSubmitting ? 'Saving...' : ticket ? 'Save' : 'Create'}
+          </button>
+        </div>
       </div>
     </div>
   )

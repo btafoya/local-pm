@@ -2,12 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import {
-  LayoutDashboard,
-  FolderKanban,
-  Users,
-  Plus,
-} from 'lucide-react'
+import { LayoutDashboard, FolderKanban, Users } from 'lucide-react'
 
 const navItems = [
   { href: '/board', label: 'Board', icon: LayoutDashboard },
@@ -19,31 +14,33 @@ export function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <aside className="w-56 bg-[#0f0f0f] border-r border-[#27272a] flex flex-col h-full">
+    <aside className="w-[220px] bg-background border-r border-border/40 flex flex-col h-full">
       {/* Logo */}
-      <div className="p-4 border-b border-[#27272a]">
-        <h1 className="text-lg font-semibold text-white flex items-center gap-2">
-          <span className="w-6 h-6 bg-indigo-500 rounded flex items-center justify-center text-xs font-bold">
-            P
+      <div className="px-4 py-5">
+        <Link href="/board" className="flex items-center gap-2.5 group">
+          <div className="w-7 h-7 bg-foreground rounded-md flex items-center justify-center">
+            <span className="text-background font-bold text-sm">L</span>
+          </div>
+          <span className="text-[15px] font-semibold text-foreground tracking-tight">
+            Local PM
           </span>
-          Local PM
-        </h1>
+        </Link>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-2">
-        <ul className="space-y-1">
+      <nav className="flex-1 px-3 py-2">
+        <ul className="space-y-0.5">
           {navItems.map((item) => {
-            const isActive = pathname === item.href
+            const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
             const Icon = item.icon
             return (
               <li key={item.href}>
                 <Link
                   href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
+                  className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors ${
                     isActive
-                      ? 'bg-[#27272a] text-white'
-                      : 'text-gray-400 hover:bg-[#1f1f23] hover:text-white'
+                      ? 'bg-secondary text-foreground'
+                      : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -54,15 +51,6 @@ export function Sidebar() {
           })}
         </ul>
       </nav>
-
-      {/* Quick Actions */}
-      <div className="p-2 border-t border-[#27272a]">
-        <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-400 hover:bg-[#1f1f23] hover:text-white rounded-md transition-colors">
-          <Plus className="w-4 h-4" />
-          New Ticket
-        </button>
-      </div>
-
     </aside>
   )
 }

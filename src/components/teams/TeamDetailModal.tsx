@@ -166,14 +166,14 @@ export function TeamDetailModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+    <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm ${isFullScreen ? '' : 'p-4'}`}>
+      <div className="absolute inset-0" onClick={onClose} />
 
       <div
-        className={`relative bg-[#18181b] border border-[#27272a] overflow-hidden transition-all duration-200 ${
+        className={`relative bg-card border border-border/50 overflow-hidden transition-all duration-200 ${
           isFullScreen
-            ? 'w-full h-full max-w-none rounded-none'
-            : 'w-full max-w-2xl mx-4 max-h-[90vh] rounded-lg'
+            ? 'w-full h-full max-w-none rounded-none border-none'
+            : 'w-full max-w-2xl mx-4 max-h-[90vh] rounded-xl'
         }`}
       >
         {/* Header */}

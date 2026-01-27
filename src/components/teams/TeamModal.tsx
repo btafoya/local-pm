@@ -1,20 +1,25 @@
 'use client'
+
 import { useState, useEffect } from 'react'
-import { X } from 'lucide-react'
+import { X, Minimize2, Users } from 'lucide-react'
 import { PROJECT_COLORS } from '@/types/enums'
 import { RichTextEditor } from '@/components/ui/RichTextEditor'
 import type { Team } from '@/payload-types'
+
 interface TeamModalProps {
   isOpen: boolean
   onClose: () => void
   team: Team | null
   onSave: (team: Team) => void
 }
+
 export function TeamModal({ isOpen, onClose, team, onSave }: TeamModalProps) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [color, setColor] = useState('#6366f1')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isFullScreen, setIsFullScreen] = useState(true)
+
   useEffect(() => {
     if (team) {
       setName(team.name)
@@ -25,27 +30,35 @@ export function TeamModal({ isOpen, onClose, team, onSave }: TeamModalProps) {
       setDescription('')
       setColor('#6366f1')
     }
+    setIsFullScreen(true)
   }, [team, isOpen])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
+
     setIsSubmitting(true)
+
     try {
       const payload = {
         name: name.trim(),
         description: description || null,
         color,
       }
+
       const url = team ? `/api/teams/${team.id}` : '/api/teams'
       const method = team ? 'PATCH' : 'POST'
+
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
+
       if (!response.ok) {
         throw new Error('Failed to save team')
       }
+
       const savedTeam = await response.json()
       onSave(savedTeam.doc || savedTeam)
     } catch (error) {
@@ -54,76 +67,120 @@ export function TeamModal({ isOpen, onClose, team, onSave }: TeamModalProps) {
       setIsSubmitting(false)
     }
   }
+
   if (!isOpen) return null
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-[#18181b] border border-[#27272a] rounded-lg w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-[#18181b] flex items-center justify-between px-6 py-4 border-b border-[#27272a]">
-          <h2 className="text-lg font-semibold text-white">
-            {team ? 'Edit Team' : 'Create Team'}
-          </h2>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-white transition-colors">
-            <X className="w-5 h-5" />
+    <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 ${isFullScreen ? '' : 'p-4 sm:p-6'}`}>
+      <div className="absolute inset-0" onClick={onClose} />
+
+      <div
+        className={`relative flex flex-col bg-card shadow-2xl overflow-hidden transition-all duration-300 ${
+          isFullScreen
+            ? 'w-full h-full max-w-none rounded-none'
+            : 'w-full max-w-2xl mx-auto max-h-[90vh] rounded-xl border border-border/50'
+        }`}
+      >
+        {/* Header */}
+        <div className="flex-none flex items-center justify-between px-6 py-3 border-b border-border/30">
+          <span className="text-sm text-muted-foreground">
+            {team ? 'Edit Team' : 'New Team'}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setIsFullScreen(!isFullScreen)}
+              className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary/50 rounded-md transition-colors"
+            >
+              <Minimize2 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary/50 rounded-md transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto">
+          <form id="team-form" onSubmit={handleSubmit} className={`${isFullScreen ? 'max-w-4xl mx-auto' : ''}`}>
+            <div className={`flex ${isFullScreen ? 'gap-0' : 'flex-col'}`}>
+              {/* Main Content */}
+              <div className={`flex-1 p-8 ${isFullScreen ? 'pr-0' : ''}`}>
+                {/* Icon & Name */}
+                <div className="flex items-start gap-4 mb-6">
+                  <div
+                    className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0"
+                    style={{ backgroundColor: `${color}20` }}
+                  >
+                    <Users className="w-7 h-7" style={{ color }} />
+                  </div>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Team name"
+                    className="flex-1 bg-transparent text-2xl font-bold text-foreground placeholder:text-muted-foreground/40 border-none px-0 py-2 focus:ring-0 focus:outline-none"
+                    autoFocus
+                    required
+                  />
+                </div>
+
+                {/* Description */}
+                <div className="mb-8">
+                  <RichTextEditor
+                    value={description}
+                    onChange={setDescription}
+                    placeholder="Describe the team's responsibilities, goals, and expertise..."
+                  />
+                </div>
+              </div>
+
+              {/* Sidebar */}
+              <div className={`${isFullScreen ? 'w-72 border-l border-border/30 p-6 bg-secondary/10' : 'p-8 pt-0'}`}>
+                <div className="space-y-6">
+                  {/* Color */}
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-3 block">Color</label>
+                    <div className="grid grid-cols-6 gap-2">
+                      {PROJECT_COLORS.map((colorOption) => (
+                        <button
+                          key={colorOption}
+                          type="button"
+                          onClick={() => setColor(colorOption)}
+                          className={`w-7 h-7 rounded-full transition-all ${
+                            color === colorOption ? 'ring-2 ring-foreground ring-offset-2 ring-offset-card scale-110' : ''
+                          }`}
+                          style={{ backgroundColor: colorOption }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        {/* Footer */}
+        <div className="flex-none flex justify-end gap-3 px-6 py-4 border-t border-border/30">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="team-form"
+            disabled={isSubmitting || !name.trim()}
+            className="px-5 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-md transition-all disabled:opacity-50"
+          >
+            {isSubmitting ? 'Saving...' : team ? 'Save' : 'Create'}
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Engineering"
-              className="w-full bg-[#1f1f23] border border-[#27272a] rounded-md px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
-              required
-            />
-          </div>
-          <div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Description</label>
-            <RichTextEditor
-              value={description}
-              onChange={setDescription}
-              placeholder="Describe the team's responsibilities, goals, and expertise..."
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Color</label>
-            <div className="grid grid-cols-6 gap-2">
-              {PROJECT_COLORS.map((colorOption) => (
-                <button
-                  key={colorOption}
-                  type="button"
-                  onClick={() => setColor(colorOption)}
-                  className={`w-8 h-8 rounded-full border-2 transition-all ${
-                    color === colorOption ? 'border-white scale-110' : 'border-transparent'
-                  }`}
-                  style={{ backgroundColor: colorOption }}
-                />
-              ))}
-            </div>
-          </div>
-          <div className="flex justify-end gap-3 pt-4 border-t border-[#27272a]">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting || !name.trim()}
-              className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? 'Saving...' : team ? 'Update' : 'Create'}
-            </button>
-          </div>
-        </form>
       </div>
     </div>
   )
