@@ -75,6 +75,84 @@ function formatPaginatedResponse<T>(
   };
 }
 
+// Helper functions to slim down nested relationship objects for list responses
+// These prevent bloated responses when relationships are expanded with depth=1
+
+interface SlimProject {
+  id: string;
+  prefix: string;
+}
+
+interface SlimTeam {
+  id: string;
+  name: string;
+}
+
+// Extract slim project info (just id and prefix) from expanded project object
+function slimProject(project: unknown): SlimProject | string | null {
+  if (!project) return null;
+  if (typeof project === 'string') return project; // Already just an ID
+  if (typeof project === 'object' && project !== null) {
+    const p = project as Record<string, unknown>;
+    return {
+      id: p.id as string,
+      prefix: p.prefix as string,
+    };
+  }
+  return null;
+}
+
+// Extract slim team info (just id and name) from expanded team object
+function slimTeam(team: unknown): SlimTeam | string | null {
+  if (!team) return null;
+  if (typeof team === 'string') return team; // Already just an ID
+  if (typeof team === 'object' && team !== null) {
+    const t = team as Record<string, unknown>;
+    return {
+      id: t.id as string,
+      name: t.name as string,
+    };
+  }
+  return null;
+}
+
+// Extract just IDs from blockedBy array (which may contain full ticket objects)
+function slimBlockedBy(blockedBy: unknown): string[] | null {
+  if (!blockedBy) return null;
+  if (!Array.isArray(blockedBy)) return null;
+  return blockedBy.map(item => {
+    if (typeof item === 'string') return item; // Already just an ID
+    if (typeof item === 'object' && item !== null) {
+      return (item as Record<string, unknown>).id as string;
+    }
+    return item;
+  }).filter(Boolean) as string[];
+}
+
+// Apply slimming to a ticket object for list responses
+function slimTicket(ticket: Record<string, unknown>, fieldsToInclude: Set<string>): Record<string, unknown> {
+  const filtered: Record<string, unknown> = {};
+
+  for (const field of fieldsToInclude) {
+    if (!(field in ticket)) continue;
+
+    const value = ticket[field];
+
+    // Slim down relationship fields
+    if (field === 'project') {
+      filtered[field] = slimProject(value);
+    } else if (field === 'team') {
+      filtered[field] = slimTeam(value);
+    } else if (field === 'blockedBy') {
+      filtered[field] = slimBlockedBy(value);
+    } else {
+      filtered[field] = value;
+    }
+  }
+
+  return filtered;
+}
+
 // Helper function to make API requests
 async function apiRequest(
   endpoint: string,
@@ -108,7 +186,7 @@ const tools: Tool[] = [
   // ============== PROJECTS ==============
   {
     name: 'list_projects',
-    description: 'List all projects in Local PM. Returns project name, prefix, status, color, icon, and ticket count.',
+    description: 'List all projects in Local PM. By default returns only basic fields (id, name, prefix, status, color, icon). Use "include" to request additional fields like description.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -124,6 +202,14 @@ const tools: Tool[] = [
         page: {
           type: 'number',
           description: 'Page number for pagination (1-indexed, default: 1). Use with limit to paginate through results.',
+        },
+        include: {
+          type: 'array',
+          description: 'Additional fields to include in the response. By default only id, name, prefix, status, color, icon are returned.',
+          items: {
+            type: 'string',
+            enum: ['description', 'createdAt', 'updatedAt'],
+          },
         },
       },
     },
@@ -238,7 +324,7 @@ const tools: Tool[] = [
   // ============== TEAMS ==============
   {
     name: 'list_teams',
-    description: 'List all teams in Local PM',
+    description: 'List all teams in Local PM. By default returns only basic fields (id, name, color). Use "include" to request additional fields like description.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -249,6 +335,14 @@ const tools: Tool[] = [
         page: {
           type: 'number',
           description: 'Page number for pagination (1-indexed, default: 1). Use with limit to paginate through results.',
+        },
+        include: {
+          type: 'array',
+          description: 'Additional fields to include in the response. By default only id, name, color are returned.',
+          items: {
+            type: 'string',
+            enum: ['description', 'createdAt', 'updatedAt'],
+          },
         },
       },
     },
@@ -334,7 +428,7 @@ const tools: Tool[] = [
   // ============== TICKETS ==============
   {
     name: 'list_tickets',
-    description: 'List tickets in Local PM with optional filters. By default returns only basic fields (id, title, status, project). Use "include" to request additional fields.',
+    description: 'List tickets in Local PM with optional filters. By default returns only basic fields (id, title, status, project). Use "include" to request additional fields. Note: Relationship fields are returned in slim format - project returns {id, prefix}, team returns {id, name}, blockedBy returns array of ticket IDs.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -570,7 +664,7 @@ const tools: Tool[] = [
   // ============== BOARD ==============
   {
     name: 'get_board',
-    description: 'Get the full Kanban board with tickets grouped by status. Optionally filter by project or team. By default returns only basic ticket fields (id, title, status, project). Use "include" to request additional fields.',
+    description: 'Get the full Kanban board with tickets grouped by status. Optionally filter by project or team. By default returns only basic ticket fields (id, title, status, project). Use "include" to request additional fields. Note: Relationship fields are returned in slim format - project returns {id, prefix}, team returns {id, name}, blockedBy returns array of ticket IDs.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -643,12 +737,13 @@ async function handleToolCall(
     case 'list_projects': {
       const limit = (args.limit as number) || 20;
       const page = (args.page as number) || 1;
+      const includeFields = (args.include as string[]) || [];
       let query = `?limit=${limit}&page=${page}&depth=0`;
       if (args.status) {
         query += `&where[status][equals]=${toPayloadValue(args.status as string)}`;
       }
       const response = await apiRequest(`/projects${query}`) as {
-        docs: unknown[];
+        docs: Array<Record<string, unknown>>;
         totalDocs: number;
         limit: number;
         totalPages: number;
@@ -658,7 +753,30 @@ async function handleToolCall(
         nextPage?: number | null;
         prevPage?: number | null;
       };
-      return formatPaginatedResponse(response);
+
+      // Default fields always included (excludes heavy description by default)
+      const defaultFields = ['id', 'name', 'prefix', 'status', 'color', 'icon'];
+      // All optional fields that can be included
+      const optionalFields = ['description', 'createdAt', 'updatedAt'];
+
+      // Build the set of fields to include
+      const fieldsToInclude = new Set([...defaultFields, ...includeFields.filter(f => optionalFields.includes(f))]);
+
+      // Filter each project to only include requested fields
+      const filteredDocs = response.docs.map(project => {
+        const filtered: Record<string, unknown> = {};
+        for (const field of fieldsToInclude) {
+          if (field in project) {
+            filtered[field] = project[field];
+          }
+        }
+        return filtered;
+      });
+
+      return formatPaginatedResponse({
+        ...response,
+        docs: filteredDocs,
+      });
     }
     case 'get_project': {
       return apiRequest(`/projects/${args.id}?depth=1`);
@@ -702,9 +820,10 @@ async function handleToolCall(
     case 'list_teams': {
       const limit = (args.limit as number) || 20;
       const page = (args.page as number) || 1;
+      const includeFields = (args.include as string[]) || [];
       const query = `?limit=${limit}&page=${page}&depth=0`;
       const response = await apiRequest(`/teams${query}`) as {
-        docs: unknown[];
+        docs: Array<Record<string, unknown>>;
         totalDocs: number;
         limit: number;
         totalPages: number;
@@ -714,7 +833,30 @@ async function handleToolCall(
         nextPage?: number | null;
         prevPage?: number | null;
       };
-      return formatPaginatedResponse(response);
+
+      // Default fields always included (excludes heavy description by default)
+      const defaultFields = ['id', 'name', 'color'];
+      // All optional fields that can be included
+      const optionalFields = ['description', 'createdAt', 'updatedAt'];
+
+      // Build the set of fields to include
+      const fieldsToInclude = new Set([...defaultFields, ...includeFields.filter(f => optionalFields.includes(f))]);
+
+      // Filter each team to only include requested fields
+      const filteredDocs = response.docs.map(team => {
+        const filtered: Record<string, unknown> = {};
+        for (const field of fieldsToInclude) {
+          if (field in team) {
+            filtered[field] = team[field];
+          }
+        }
+        return filtered;
+      });
+
+      return formatPaginatedResponse({
+        ...response,
+        docs: filteredDocs,
+      });
     }
     case 'get_team': {
       return apiRequest(`/teams/${args.id}?depth=1`);
@@ -765,7 +907,7 @@ async function handleToolCall(
         prevPage?: number | null;
       };
 
-      // Default fields always included
+      // Default fields always included (slim versions of relationships)
       const defaultFields = ['id', 'title', 'status', 'project'];
       // All optional fields that can be included
       const optionalFields = ['description', 'team', 'priority', 'dueDate', 'labels', 'subtasks', 'blockedBy', 'sortOrder', 'createdAt', 'updatedAt'];
@@ -773,16 +915,8 @@ async function handleToolCall(
       // Build the set of fields to include
       const fieldsToInclude = new Set([...defaultFields, ...includeFields.filter(f => optionalFields.includes(f))]);
 
-      // Filter each ticket to only include requested fields
-      const filteredDocs = response.docs.map(ticket => {
-        const filtered: Record<string, unknown> = {};
-        for (const field of fieldsToInclude) {
-          if (field in ticket) {
-            filtered[field] = ticket[field];
-          }
-        }
-        return filtered;
-      });
+      // Filter each ticket to only include requested fields, with slimmed relationships
+      const filteredDocs = response.docs.map(ticket => slimTicket(ticket, fieldsToInclude));
 
       return formatPaginatedResponse({
         ...response,
@@ -843,7 +977,7 @@ async function handleToolCall(
       const response = await apiRequest(`/tickets${query}`) as { docs: Array<Record<string, unknown>> };
       const tickets = response.docs || [];
 
-      // Default fields always included
+      // Default fields always included (slim versions of relationships)
       const defaultFields = ['id', 'title', 'status', 'project'];
       // All optional fields that can be included
       const optionalFields = ['description', 'team', 'priority', 'dueDate', 'labels', 'subtasks', 'blockedBy', 'sortOrder', 'createdAt', 'updatedAt'];
@@ -851,22 +985,11 @@ async function handleToolCall(
       // Build the set of fields to include
       const fieldsToInclude = new Set([...defaultFields, ...includeFields.filter(f => optionalFields.includes(f))]);
 
-      // Filter each ticket to only include requested fields
-      const filterTicket = (ticket: Record<string, unknown>) => {
-        const filtered: Record<string, unknown> = {};
-        for (const field of fieldsToInclude) {
-          if (field in ticket) {
-            filtered[field] = ticket[field];
-          }
-        }
-        return filtered;
-      };
-
-      // Group by status with filtered fields
+      // Group by status with filtered and slimmed fields
       const board = {
-        todo: tickets.filter((t) => t.status === 'TODO').map(filterTicket),
-        in_progress: tickets.filter((t) => t.status === 'IN_PROGRESS').map(filterTicket),
-        done: tickets.filter((t) => t.status === 'DONE').map(filterTicket),
+        todo: tickets.filter((t) => t.status === 'TODO').map(t => slimTicket(t, fieldsToInclude)),
+        in_progress: tickets.filter((t) => t.status === 'IN_PROGRESS').map(t => slimTicket(t, fieldsToInclude)),
+        done: tickets.filter((t) => t.status === 'DONE').map(t => slimTicket(t, fieldsToInclude)),
         summary: {
           total: tickets.length,
           todo: tickets.filter((t) => t.status === 'TODO').length,
