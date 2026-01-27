@@ -1,17 +1,25 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { Plus, MoreHorizontal, Pencil, Trash2, FolderKanban, Eye } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Plus, MoreHorizontal, Pencil, Trash2, FolderKanban, Eye, Loader2 } from 'lucide-react'
 import { ProjectModal } from './ProjectModal'
 import { ProjectDetailModal } from './ProjectDetailModal'
 import { TicketDetailModal } from '@/components/kanban/TicketDetailModal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { PROJECT_STATUS_OPTIONS, ProjectStatus } from '@/types/enums'
+import { useInfiniteScroll } from '@/hooks/useInfiniteScroll'
 import type { Project, Team, Ticket } from '@/payload-types'
 import * as Icons from 'lucide-react'
 
+interface PaginationInfo {
+  page: number
+  totalPages: number
+  hasNextPage: boolean
+}
+
 interface ProjectsListProps {
   initialProjects: Project[]
+  initialPagination?: PaginationInfo
 }
 
 const iconMap: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
@@ -29,13 +37,18 @@ const iconMap: Record<string, React.ComponentType<{ className?: string; style?: 
   database: Icons.Database,
 }
 
-export function ProjectsList({ initialProjects }: ProjectsListProps) {
+export function ProjectsList({ initialProjects, initialPagination }: ProjectsListProps) {
   const [projects, setProjects] = useState<Project[]>(initialProjects)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingProject, setEditingProject] = useState<Project | null>(null)
   const [viewingProject, setViewingProject] = useState<Project | null>(null)
   const [menuOpen, setMenuOpen] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  // Pagination state
+  const [pagination, setPagination] = useState<PaginationInfo>(
+    initialPagination || { page: 1, totalPages: 1, hasNextPage: false }
+  )
 
   // Delete confirmation state
   const [deleteConfirm, setDeleteConfirm] = useState<{
@@ -47,6 +60,33 @@ export function ProjectsList({ initialProjects }: ProjectsListProps) {
   // Ticket detail modal state
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
   const [teams, setTeams] = useState<Team[]>([])
+
+  // Load more projects for infinite scroll
+  const loadMoreProjects = useCallback(async () => {
+    if (!pagination.hasNextPage) return
+
+    try {
+      const nextPage = pagination.page + 1
+      const response = await fetch(`/api/projects?page=${nextPage}&limit=20&sort=-createdAt`)
+      const data = await response.json()
+
+      if (data.docs && data.docs.length > 0) {
+        setProjects((prev) => [...prev, ...data.docs])
+        setPagination({
+          page: data.page,
+          totalPages: data.totalPages,
+          hasNextPage: data.hasNextPage,
+        })
+      }
+    } catch (error) {
+      console.error('Failed to load more projects:', error)
+    }
+  }, [pagination])
+
+  const { sentinelRef, isLoading: isLoadingMore } = useInfiniteScroll(
+    loadMoreProjects,
+    pagination.hasNextPage
+  )
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -238,92 +278,102 @@ export function ProjectsList({ initialProjects }: ProjectsListProps) {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {projects.map((project) => {
-            const IconComponent = iconMap[project.icon as string] || Icons.Folder
-            return (
-              <div
-                key={project.id}
-                onClick={() => handleViewProject(project)}
-                className="bg-[#18181b] border border-[#27272a] rounded-lg p-4 hover:border-[#3f3f46] transition-colors cursor-pointer"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-10 h-10 rounded-lg flex items-center justify-center"
-                      style={{ backgroundColor: `${project.color}20` }}
-                    >
-                      <IconComponent
-                        className="w-5 h-5"
-                        style={{ color: project.color as string }}
-                      />
-                    </div>
-                    <div>
-                      <h3 className="text-white font-medium">{project.name}</h3>
-                      <span className="text-xs text-gray-500">{project.prefix}</span>
-                    </div>
-                  </div>
-
-                  <div className="relative" ref={menuOpen === project.id ? menuRef : null}>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setMenuOpen(menuOpen === project.id ? null : project.id)
-                      }}
-                      className="p-1 text-gray-400 hover:text-white transition-colors"
-                    >
-                      <MoreHorizontal className="w-4 h-4" />
-                    </button>
-
-                    {menuOpen === project.id && (
-                      <div className="absolute right-0 top-full mt-1 bg-[#27272a] border border-[#3f3f46] rounded-md shadow-lg py-1 z-10 min-w-[120px]">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleViewProject(project)
-                          }}
-                          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-300 hover:bg-[#3f3f46] transition-colors"
-                        >
-                          <Eye className="w-3 h-3" />
-                          View
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleEditProject(project)
-                          }}
-                          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-300 hover:bg-[#3f3f46] transition-colors"
-                        >
-                          <Pencil className="w-3 h-3" />
-                          Edit
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleInitiateDelete(project)
-                          }}
-                          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-400 hover:bg-[#3f3f46] transition-colors"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          Delete
-                        </button>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {projects.map((project) => {
+              const IconComponent = iconMap[project.icon as string] || Icons.Folder
+              return (
+                <div
+                  key={project.id}
+                  onClick={() => handleViewProject(project)}
+                  className="bg-[#18181b] border border-[#27272a] rounded-lg p-4 hover:border-[#3f3f46] transition-colors cursor-pointer"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-10 h-10 rounded-lg flex items-center justify-center"
+                        style={{ backgroundColor: `${project.color}20` }}
+                      >
+                        <IconComponent
+                          className="w-5 h-5"
+                          style={{ color: project.color as string }}
+                        />
                       </div>
-                    )}
+                      <div>
+                        <h3 className="text-white font-medium">{project.name}</h3>
+                        <span className="text-xs text-gray-500">{project.prefix}</span>
+                      </div>
+                    </div>
+
+                    <div className="relative" ref={menuOpen === project.id ? menuRef : null}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setMenuOpen(menuOpen === project.id ? null : project.id)
+                        }}
+                        className="p-1 text-gray-400 hover:text-white transition-colors"
+                      >
+                        <MoreHorizontal className="w-4 h-4" />
+                      </button>
+
+                      {menuOpen === project.id && (
+                        <div className="absolute right-0 top-full mt-1 bg-[#27272a] border border-[#3f3f46] rounded-md shadow-lg py-1 z-10 min-w-[120px]">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleViewProject(project)
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-300 hover:bg-[#3f3f46] transition-colors"
+                          >
+                            <Eye className="w-3 h-3" />
+                            View
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleEditProject(project)
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-300 hover:bg-[#3f3f46] transition-colors"
+                          >
+                            <Pencil className="w-3 h-3" />
+                            Edit
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleInitiateDelete(project)
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-400 hover:bg-[#3f3f46] transition-colors"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className={`text-xs px-2 py-1 rounded ${getStatusBadge(project.status as string)}`}>
+                      {PROJECT_STATUS_OPTIONS.find((o) => o.value === project.status)?.label || project.status}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {project.ticketCounter || 0} tickets
+                    </span>
                   </div>
                 </div>
+              )
+            })}
+          </div>
 
-                <div className="flex items-center justify-between">
-                  <span className={`text-xs px-2 py-1 rounded ${getStatusBadge(project.status as string)}`}>
-                    {PROJECT_STATUS_OPTIONS.find((o) => o.value === project.status)?.label || project.status}
-                  </span>
-                  <span className="text-xs text-gray-500">
-                    {project.ticketCounter || 0} tickets
-                  </span>
-                </div>
-              </div>
-            )
-          })}
-        </div>
+          {/* Infinite scroll sentinel and loading indicator */}
+          <div ref={sentinelRef} className="h-4" />
+          {isLoadingMore && (
+            <div className="flex justify-center py-4">
+              <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
+            </div>
+          )}
+        </>
       )}
 
       <ProjectModal

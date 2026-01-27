@@ -2,9 +2,16 @@
 
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { Loader2, ChevronDown } from 'lucide-react'
 import { KanbanCard } from './KanbanCard'
 import { TicketStatus, STATUS_COLORS } from '@/types/enums'
 import type { Ticket } from '@/payload-types'
+
+interface ColumnPaginationInfo {
+  hasNextPage: boolean
+  totalDocs: number
+  loadedCount: number
+}
 
 interface KanbanColumnProps {
   id: TicketStatus
@@ -12,6 +19,9 @@ interface KanbanColumnProps {
   tickets: Ticket[]
   onViewTicket: (ticket: Ticket) => void
   onDeleteTicket: (ticketId: string) => void
+  pagination?: ColumnPaginationInfo
+  isLoadingMore?: boolean
+  onLoadMore?: () => void
 }
 
 export function KanbanColumn({
@@ -20,10 +30,14 @@ export function KanbanColumn({
   tickets,
   onViewTicket,
   onDeleteTicket,
+  pagination,
+  isLoadingMore,
+  onLoadMore,
 }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id })
 
   const statusColor = STATUS_COLORS[id]
+  const remainingCount = pagination ? pagination.totalDocs - pagination.loadedCount : 0
 
   return (
     <div
@@ -40,7 +54,7 @@ export function KanbanColumn({
         />
         <h3 className="text-sm font-medium text-white">{title}</h3>
         <span className="ml-auto text-xs text-gray-500 bg-[#27272a] px-2 py-0.5 rounded">
-          {tickets.length}
+          {pagination ? `${pagination.loadedCount}/${pagination.totalDocs}` : tickets.length}
         </span>
       </div>
 
@@ -62,9 +76,32 @@ export function KanbanColumn({
           </div>
         </SortableContext>
 
-        {tickets.length === 0 && (
+        {tickets.length === 0 && !isLoadingMore && (
           <div className="flex items-center justify-center h-20 text-sm text-gray-500">
             No tickets
+          </div>
+        )}
+
+        {/* Load more button */}
+        {pagination?.hasNextPage && onLoadMore && (
+          <div className="mt-2 pt-2 border-t border-[#27272a]">
+            <button
+              onClick={onLoadMore}
+              disabled={isLoadingMore}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs text-gray-400 hover:text-white bg-[#27272a] hover:bg-[#3f3f46] rounded-md transition-colors disabled:opacity-50"
+            >
+              {isLoadingMore ? (
+                <>
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="w-3 h-3" />
+                  Load more ({remainingCount})
+                </>
+              )}
+            </button>
           </div>
         )}
       </div>

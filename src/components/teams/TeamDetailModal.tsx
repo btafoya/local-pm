@@ -9,6 +9,8 @@ import {
   Calendar,
   Users,
   FileText,
+  Loader2,
+  ChevronDown,
 } from 'lucide-react'
 import { PROJECT_COLORS, TicketStatus } from '@/types/enums'
 import { RichTextEditor, RichTextDisplay } from '@/components/ui/RichTextEditor'
@@ -36,6 +38,12 @@ export function TeamDetailModal({
   const [isSaving, setIsSaving] = useState(false)
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [isLoadingTickets, setIsLoadingTickets] = useState(false)
+  const [ticketPagination, setTicketPagination] = useState({
+    page: 1,
+    hasNextPage: false,
+    totalDocs: 0,
+  })
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
 
   // Form state
   const [name, setName] = useState(team.name)
@@ -55,13 +63,42 @@ export function TeamDetailModal({
   const loadTickets = async () => {
     setIsLoadingTickets(true)
     try {
-      const response = await fetch(`/api/tickets?where[team][equals]=${initialTeam.id}&limit=100&depth=1`)
+      const response = await fetch(`/api/tickets?where[team][equals]=${initialTeam.id}&limit=20&page=1&depth=1`)
       const data = await response.json()
       setTickets(data.docs || [])
+      setTicketPagination({
+        page: data.page || 1,
+        hasNextPage: data.hasNextPage || false,
+        totalDocs: data.totalDocs || 0,
+      })
     } catch (error) {
       console.error('Failed to load tickets:', error)
     } finally {
       setIsLoadingTickets(false)
+    }
+  }
+
+  const loadMoreTickets = async () => {
+    if (!ticketPagination.hasNextPage || isLoadingMore) return
+
+    setIsLoadingMore(true)
+    try {
+      const nextPage = ticketPagination.page + 1
+      const response = await fetch(`/api/tickets?where[team][equals]=${initialTeam.id}&limit=20&page=${nextPage}&depth=1`)
+      const data = await response.json()
+
+      if (data.docs && data.docs.length > 0) {
+        setTickets((prev) => [...prev, ...data.docs])
+        setTicketPagination({
+          page: data.page || nextPage,
+          hasNextPage: data.hasNextPage || false,
+          totalDocs: data.totalDocs || 0,
+        })
+      }
+    } catch (error) {
+      console.error('Failed to load more tickets:', error)
+    } finally {
+      setIsLoadingMore(false)
     }
   }
 
@@ -271,12 +308,18 @@ export function TeamDetailModal({
             )}
           </div>
 
-          {/* Recent Tickets */}
-          {tickets.length > 0 && (
-            <div className="bg-[#1f1f23] rounded-lg p-4 mb-6">
-              <h3 className="text-sm font-medium text-gray-400 mb-4">Recent Assigned Tickets</h3>
+          {/* Assigned Tickets */}
+          <div className="bg-[#1f1f23] rounded-lg p-4 mb-6">
+            <h3 className="text-sm font-medium text-gray-400 mb-4">
+              Assigned Tickets {ticketPagination.totalDocs > 0 && `(${ticketPagination.totalDocs})`}
+            </h3>
+            {isLoadingTickets ? (
+              <div className="text-sm text-gray-500">Loading...</div>
+            ) : tickets.length === 0 ? (
+              <p className="text-sm text-gray-500">No tickets assigned to this team.</p>
+            ) : (
               <div className="space-y-2">
-                {tickets.slice(0, 5).map((ticket) => {
+                {tickets.map((ticket) => {
                   const project = typeof ticket.project === 'object' ? ticket.project : null
                   return (
                     <div
@@ -311,9 +354,30 @@ export function TeamDetailModal({
                     </div>
                   )
                 })}
+
+                {/* Load more button */}
+                {ticketPagination.hasNextPage && (
+                  <button
+                    onClick={loadMoreTickets}
+                    disabled={isLoadingMore}
+                    className="w-full flex items-center justify-center gap-2 py-2 text-xs text-gray-400 hover:text-white bg-[#27272a] hover:bg-[#3f3f46] rounded-md transition-colors disabled:opacity-50"
+                  >
+                    {isLoadingMore ? (
+                      <>
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-3 h-3" />
+                        Load more ({ticketPagination.totalDocs - tickets.length} remaining)
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Timestamps */}
           <div className="border-t border-[#27272a] pt-4 text-xs text-gray-500">

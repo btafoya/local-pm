@@ -20,6 +20,8 @@ import {
   GitBranch,
   ChevronDown,
   ChevronUp,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react'
 import {
   TicketStatus,
@@ -61,6 +63,7 @@ export function TicketDetailModal({
 }: TicketDetailModalProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isFullScreen, setIsFullScreen] = useState(false)
 
   // Form state
   const [title, setTitle] = useState(ticket.title)
@@ -206,13 +209,465 @@ export function TicketDetailModal({
 
   if (!isOpen) return null
 
+  // Reusable Components
+  const TitleSection = () => (
+    <div className="mb-6">
+      {isEditing ? (
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="text-xl font-semibold bg-[#1f1f23] border border-[#27272a] rounded-md px-3 py-2 w-full text-white focus:outline-none focus:border-indigo-500"
+        />
+      ) : (
+        <h2 className="text-xl font-semibold text-white">{ticket.title}</h2>
+      )}
+    </div>
+  )
+
+  const DescriptionSection = ({ minHeight = '120px' }: { minHeight?: string }) => (
+    <div className="bg-[#1f1f23] rounded-lg p-4 mb-6">
+      <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+        <FileText className="w-3 h-3" />
+        Description
+      </div>
+      {isEditing ? (
+        <RichTextEditor
+          value={description}
+          onChange={setDescription}
+          placeholder="Describe the task in detail..."
+        />
+      ) : (
+        <div style={{ minHeight }}>
+          <RichTextDisplay content={ticket.description as unknown as string || ''} />
+        </div>
+      )}
+    </div>
+  )
+
+  const SubtasksSection = () => (
+    <div className="bg-[#1f1f23] rounded-lg p-4 mb-6">
+      <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+        <CheckSquare className="w-3 h-3" />
+        Subtasks
+        {subtasks.length > 0 && (
+          <span className="ml-auto text-xs">
+            {subtasks.filter(s => s.completed).length}/{subtasks.length} completed
+          </span>
+        )}
+      </div>
+      <div className="space-y-2 mb-2">
+        {subtasks.map((subtask, index) => (
+          <div key={index} className="flex items-center gap-2 p-2 bg-[#27272a] rounded-md">
+            <button
+              type="button"
+              onClick={() => toggleSubtask(index)}
+              className="text-gray-400 hover:text-white transition-colors"
+            >
+              {subtask.completed ? (
+                <CheckSquare className="w-4 h-4 text-green-400" />
+              ) : (
+                <Square className="w-4 h-4" />
+              )}
+            </button>
+            <span className={`flex-1 text-sm ${subtask.completed ? 'text-gray-500 line-through' : 'text-white'}`}>
+              {subtask.title}
+            </span>
+            {isEditing && (
+              <button
+                type="button"
+                onClick={() => removeSubtask(index)}
+                className="text-gray-400 hover:text-red-400 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        ))}
+        {subtasks.length === 0 && !isEditing && (
+          <span className="text-sm text-gray-500">No subtasks</span>
+        )}
+      </div>
+      {isEditing && (
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newSubtaskTitle}
+            onChange={(e) => setNewSubtaskTitle(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addSubtask())}
+            placeholder="Add a subtask..."
+            className="flex-1 bg-[#27272a] border border-[#3f3f46] rounded-md px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+          />
+          <button
+            type="button"
+            onClick={addSubtask}
+            className="p-2 bg-[#27272a] hover:bg-[#3f3f46] rounded-md transition-colors"
+          >
+            <Plus className="w-4 h-4 text-white" />
+          </button>
+        </div>
+      )}
+    </div>
+  )
+
+  const StatusSection = () => (
+    <div className="bg-[#1f1f23] rounded-lg p-4">
+      <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+        <Clock className="w-3 h-3" />
+        Status
+      </div>
+      {isEditing ? (
+        <select
+          value={status as string}
+          onChange={(e) => setStatus(e.target.value as TicketStatus)}
+          className="w-full bg-[#27272a] border border-[#3f3f46] rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500"
+        >
+          {TICKET_STATUS_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <div className="flex items-center gap-2">
+          <span
+            className="w-2 h-2 rounded-full"
+            style={{ backgroundColor: STATUS_COLORS[ticket.status as TicketStatus] }}
+          />
+          <span className="text-sm text-white">
+            {TICKET_STATUS_OPTIONS.find((o) => o.value === ticket.status)?.label}
+          </span>
+        </div>
+      )}
+    </div>
+  )
+
+  const PrioritySection = () => (
+    <div className="bg-[#1f1f23] rounded-lg p-4">
+      <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+        <Flag className="w-3 h-3" />
+        Priority
+      </div>
+      {isEditing ? (
+        <select
+          value={priority as string}
+          onChange={(e) => setPriority(e.target.value as TicketPriority)}
+          className="w-full bg-[#27272a] border border-[#3f3f46] rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500"
+        >
+          {TICKET_PRIORITY_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <div className="flex items-center gap-2">
+          <span
+            className="w-2 h-2 rounded-full"
+            style={{ backgroundColor: PRIORITY_COLORS[ticket.priority as TicketPriority] || PRIORITY_COLORS[TicketPriority.NO_PRIORITY] }}
+          />
+          <span className="text-sm text-white">
+            {TICKET_PRIORITY_OPTIONS.find((o) => o.value === ticket.priority)?.label || 'No Priority'}
+          </span>
+        </div>
+      )}
+    </div>
+  )
+
+  const ProjectSection = () => (
+    <div className="bg-[#1f1f23] rounded-lg p-4">
+      <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+        <FolderKanban className="w-3 h-3" />
+        Project
+      </div>
+      {project && (
+        <div className="flex items-center gap-2">
+          <span
+            className="w-2 h-2 rounded-full"
+            style={{ backgroundColor: project.color as string }}
+          />
+          <span className="text-sm text-white">{project.name}</span>
+        </div>
+      )}
+    </div>
+  )
+
+  const TeamSection = () => (
+    <div className="bg-[#1f1f23] rounded-lg p-4">
+      <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+        <Users className="w-3 h-3" />
+        Team
+      </div>
+      {isEditing ? (
+        <select
+          value={teamId}
+          onChange={(e) => setTeamId(e.target.value)}
+          className="w-full bg-[#27272a] border border-[#3f3f46] rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500"
+        >
+          <option value="">No team</option>
+          {teams.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+      ) : team ? (
+        <div className="flex items-center gap-2">
+          <span
+            className="w-2 h-2 rounded-full"
+            style={{ backgroundColor: team.color as string }}
+          />
+          <span className="text-sm text-white">{team.name}</span>
+        </div>
+      ) : (
+        <span className="text-sm text-gray-500">No team assigned</span>
+      )}
+    </div>
+  )
+
+  const DueDateSection = () => (
+    <div className="bg-[#1f1f23] rounded-lg p-4">
+      <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+        <Calendar className="w-3 h-3" />
+        Due Date
+      </div>
+      {isEditing ? (
+        <input
+          type="date"
+          value={dueDate}
+          onChange={(e) => setDueDate(e.target.value)}
+          className="w-full bg-[#27272a] border border-[#3f3f46] rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500"
+        />
+      ) : ticket.dueDate ? (
+        <span className="text-sm text-white">{formatRelativeDate(ticket.dueDate)}</span>
+      ) : (
+        <span className="text-sm text-gray-500">No due date</span>
+      )}
+    </div>
+  )
+
+  const LabelsSection = () => (
+    <div className="bg-[#1f1f23] rounded-lg p-4">
+      <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+        <Tag className="w-3 h-3" />
+        Labels
+      </div>
+      <div className="flex flex-wrap gap-2 mb-2">
+        {labels.map((label, index) => (
+          <span
+            key={index}
+            className="flex items-center gap-1 text-xs px-2 py-1 rounded"
+            style={{
+              backgroundColor: `${label.color}20`,
+              color: label.color as string,
+            }}
+          >
+            {label.name}
+            {isEditing && (
+              <button onClick={() => removeLabel(index)} className="hover:opacity-70">
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </span>
+        ))}
+        {labels.length === 0 && !isEditing && (
+          <span className="text-sm text-gray-500">No labels</span>
+        )}
+      </div>
+      {isEditing && (
+        <div className="flex gap-2 mt-2">
+          <input
+            type="text"
+            value={newLabelName}
+            onChange={(e) => setNewLabelName(e.target.value)}
+            placeholder="Label name"
+            className="flex-1 bg-[#27272a] border border-[#3f3f46] rounded-md px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+          />
+          <input
+            type="color"
+            value={newLabelColor}
+            onChange={(e) => setNewLabelColor(e.target.value)}
+            className="w-10 h-8 bg-[#27272a] border border-[#3f3f46] rounded cursor-pointer"
+          />
+          <button
+            type="button"
+            onClick={addLabel}
+            className="p-2 bg-[#27272a] hover:bg-[#3f3f46] rounded-md transition-colors"
+          >
+            <Plus className="w-4 h-4 text-white" />
+          </button>
+        </div>
+      )}
+    </div>
+  )
+
+  const BlockedBySection = () => (
+    <div className="bg-[#1f1f23] rounded-lg p-4">
+      <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+        <Ban className="w-3 h-3" />
+        Blocked By
+      </div>
+      <div className="space-y-2 mb-2">
+        {isEditing ? (
+          blockedByIds.map((blockerId) => {
+            const blocker = (allTickets || []).find(t => t.id === blockerId)
+            if (!blocker) return null
+            const blockerProject = typeof blocker.project === 'object' ? blocker.project : null
+            return (
+              <div key={blockerId} className="flex items-center gap-2 p-2 bg-[#27272a] rounded-md">
+                <Ban className="w-4 h-4 text-amber-500" />
+                <span
+                  className="text-xs font-medium px-1.5 py-0.5 rounded"
+                  style={{
+                    backgroundColor: blockerProject ? `${blockerProject.color}20` : '#27272a',
+                    color: blockerProject?.color as string || '#888',
+                  }}
+                >
+                  {blocker.ticketId}
+                </span>
+                <span className={`flex-1 text-sm ${blocker.status === 'DONE' ? 'text-gray-500 line-through' : 'text-white'}`}>
+                  {blocker.title}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeBlocker(blockerId)}
+                  className="text-gray-400 hover:text-red-400 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            )
+          })
+        ) : blockingTickets.length > 0 ? (
+          blockingTickets.map((blocker) => {
+            const blockerProject = typeof blocker.project === 'object' ? blocker.project : null
+            return (
+              <div key={blocker.id} className="flex items-center gap-2 p-2 bg-[#27272a] rounded-md">
+                <Ban className={`w-4 h-4 ${blocker.status === 'DONE' ? 'text-green-500' : 'text-amber-500'}`} />
+                <span
+                  className="text-xs font-medium px-1.5 py-0.5 rounded"
+                  style={{
+                    backgroundColor: blockerProject ? `${blockerProject.color}20` : '#27272a',
+                    color: blockerProject?.color as string || '#888',
+                  }}
+                >
+                  {blocker.ticketId}
+                </span>
+                <span className={`flex-1 text-sm ${blocker.status === 'DONE' ? 'text-gray-500 line-through' : 'text-white'}`}>
+                  {blocker.title}
+                </span>
+                <span className={`text-xs px-2 py-0.5 rounded ${blocker.status === 'DONE' ? 'bg-green-500/20 text-green-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                  {blocker.status === 'DONE' ? 'Done' : 'Pending'}
+                </span>
+              </div>
+            )
+          })
+        ) : (
+          <span className="text-sm text-gray-500">No blockers</span>
+        )}
+      </div>
+      {isEditing && availableTickets.length > 0 && (
+        <select
+          onChange={(e) => {
+            if (e.target.value) {
+              addBlocker(e.target.value)
+              e.target.value = ''
+            }
+          }}
+          className="w-full bg-[#27272a] border border-[#3f3f46] rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500"
+          defaultValue=""
+        >
+          <option value="">Add a blocking ticket...</option>
+          {availableTickets.map((t) => {
+            const tProject = typeof t.project === 'object' ? t.project : null
+            return (
+              <option key={t.id} value={t.id}>
+                {t.ticketId} - {t.title} {tProject ? `(${tProject.name})` : ''}
+              </option>
+            )
+          })}
+        </select>
+      )}
+    </div>
+  )
+
+  const BlocksSection = () => (
+    <div className="bg-[#1f1f23] rounded-lg p-4">
+      <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+        <Ban className="w-3 h-3 rotate-180" />
+        Blocks
+      </div>
+      <div className="space-y-2">
+        {blockedTickets.length > 0 ? (
+          blockedTickets.map((blocked) => {
+            const blockedProject = typeof blocked.project === 'object' ? blocked.project : null
+            return (
+              <div key={blocked.id} className="flex items-center gap-2 p-2 bg-[#27272a] rounded-md">
+                <Ban className={`w-4 h-4 ${blocked.status === 'DONE' ? 'text-green-500' : 'text-red-500'}`} />
+                <span
+                  className="text-xs font-medium px-1.5 py-0.5 rounded"
+                  style={{
+                    backgroundColor: blockedProject ? `${blockedProject.color}20` : '#27272a',
+                    color: blockedProject?.color as string || '#888',
+                  }}
+                >
+                  {blocked.ticketId}
+                </span>
+                <span className={`flex-1 text-sm ${blocked.status === 'DONE' ? 'text-gray-500 line-through' : 'text-white'}`}>
+                  {blocked.title}
+                </span>
+                <span className={`text-xs px-2 py-0.5 rounded ${blocked.status === 'DONE' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                  {blocked.status === 'DONE' ? 'Done' : 'Waiting'}
+                </span>
+              </div>
+            )
+          })
+        ) : (
+          <span className="text-sm text-gray-500">This ticket doesn&apos;t block any other tickets</span>
+        )}
+      </div>
+    </div>
+  )
+
+  const DependencyGraphSection = () => (
+    !isEditing && (blockingTickets.length > 0 || blockedTickets.length > 0) ? (
+      <div className="bg-[#1f1f23] rounded-lg p-4">
+        <button
+          onClick={() => setShowDependencyGraph(!showDependencyGraph)}
+          className="flex items-center justify-between w-full text-left"
+        >
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <GitBranch className="w-3 h-3" />
+            Dependency Graph
+          </div>
+          {showDependencyGraph ? (
+            <ChevronUp className="w-4 h-4 text-gray-500" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-gray-500" />
+          )}
+        </button>
+        {showDependencyGraph && (
+          <div className="mt-3">
+            <DependencyGraph ticket={ticket} allTickets={allTickets} />
+          </div>
+        )}
+      </div>
+    ) : null
+  )
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
-      <div className="relative bg-[#18181b] border border-[#27272a] rounded-lg w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+      <div
+        className={`relative bg-[#18181b] border border-[#27272a] overflow-hidden transition-all duration-200 ${
+          isFullScreen
+            ? 'w-full h-full max-w-none rounded-none'
+            : 'w-full max-w-2xl mx-4 max-h-[90vh] rounded-lg'
+        }`}
+      >
         {/* Header */}
-        <div className="sticky top-0 bg-[#18181b] border-b border-[#27272a] px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 z-10 bg-[#18181b] border-b border-[#27272a] px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {project && (
               <span
@@ -248,6 +703,13 @@ export function TicketDetailModal({
             ) : (
               <>
                 <button
+                  onClick={() => setIsFullScreen(!isFullScreen)}
+                  className="p-2 text-gray-400 hover:text-white transition-colors"
+                  title={isFullScreen ? 'Exit full screen' : 'Full screen'}
+                >
+                  {isFullScreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                </button>
+                <button
                   onClick={() => setIsEditing(true)}
                   className="p-2 text-gray-400 hover:text-white transition-colors"
                   title="Edit"
@@ -273,469 +735,87 @@ export function TicketDetailModal({
         </div>
 
         {/* Content */}
-        <div className="p-6">
-          {/* Title */}
-          <div className="mb-6">
-            {isEditing ? (
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="text-xl font-semibold bg-[#1f1f23] border border-[#27272a] rounded-md px-3 py-2 w-full text-white focus:outline-none focus:border-indigo-500"
-              />
-            ) : (
-              <h2 className="text-xl font-semibold text-white">{ticket.title}</h2>
-            )}
-          </div>
-
-          {/* Description */}
-          <div className="bg-[#1f1f23] rounded-lg p-4 mb-6">
-            <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-              <FileText className="w-3 h-3" />
-              Description
-            </div>
-            {isEditing ? (
-              <RichTextEditor
-                value={description}
-                onChange={setDescription}
-                placeholder="Describe the task in detail..."
-              />
-            ) : (
-              <RichTextDisplay content={ticket.description as unknown as string || ''} />
-            )}
-          </div>
-
-          {/* Subtasks */}
-          <div className="bg-[#1f1f23] rounded-lg p-4 mb-6">
-            <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-              <CheckSquare className="w-3 h-3" />
-              Subtasks
-              {subtasks.length > 0 && (
-                <span className="ml-auto text-xs">
-                  {subtasks.filter(s => s.completed).length}/{subtasks.length} completed
-                </span>
-              )}
-            </div>
-            <div className="space-y-2 mb-2">
-              {subtasks.map((subtask, index) => (
-                <div
-                  key={index}
-                  className="flex items-center gap-2 p-2 bg-[#27272a] rounded-md"
-                >
-                  <button
-                    type="button"
-                    onClick={() => toggleSubtask(index)}
-                    className="text-gray-400 hover:text-white transition-colors"
-                  >
-                    {subtask.completed ? (
-                      <CheckSquare className="w-4 h-4 text-green-400" />
-                    ) : (
-                      <Square className="w-4 h-4" />
-                    )}
-                  </button>
-                  <span className={`flex-1 text-sm ${subtask.completed ? 'text-gray-500 line-through' : 'text-white'}`}>
-                    {subtask.title}
-                  </span>
-                  {isEditing && (
-                    <button
-                      type="button"
-                      onClick={() => removeSubtask(index)}
-                      className="text-gray-400 hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
+        <div className={`overflow-y-auto ${isFullScreen ? 'h-[calc(100vh-73px)]' : 'max-h-[calc(90vh-73px)]'}`}>
+          <div className={`p-6 ${isFullScreen ? 'max-w-7xl mx-auto' : ''}`}>
+            {isFullScreen ? (
+              /* Fullscreen: Two-column layout */
+              <div className="flex gap-8">
+                {/* Left Column - Main Content */}
+                <div className="flex-1 min-w-0">
+                  <TitleSection />
+                  <DescriptionSection minHeight="300px" />
+                  <SubtasksSection />
+                  <div className="mb-6">
+                    <BlockedBySection />
+                  </div>
+                  <div className="mb-6">
+                    <BlocksSection />
+                  </div>
+                  <DependencyGraphSection />
                 </div>
-              ))}
-              {subtasks.length === 0 && !isEditing && (
-                <span className="text-sm text-gray-500">No subtasks</span>
-              )}
-            </div>
-            {isEditing && (
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newSubtaskTitle}
-                  onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addSubtask())}
-                  placeholder="Add a subtask..."
-                  className="flex-1 bg-[#27272a] border border-[#3f3f46] rounded-md px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
-                />
-                <button
-                  type="button"
-                  onClick={addSubtask}
-                  className="p-2 bg-[#27272a] hover:bg-[#3f3f46] rounded-md transition-colors"
-                >
-                  <Plus className="w-4 h-4 text-white" />
-                </button>
-              </div>
-            )}
-          </div>
 
-          {/* Meta Grid */}
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            {/* Status */}
-            <div className="bg-[#1f1f23] rounded-lg p-4">
-              <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-                <Clock className="w-3 h-3" />
-                Status
-              </div>
-              {isEditing ? (
-                <select
-                  value={status as string}
-                  onChange={(e) => setStatus(e.target.value as TicketStatus)}
-                  className="w-full bg-[#27272a] border border-[#3f3f46] rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500"
-                >
-                  {TICKET_STATUS_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <span
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: STATUS_COLORS[ticket.status as TicketStatus] }}
-                  />
-                  <span className="text-sm text-white">
-                    {TICKET_STATUS_OPTIONS.find((o) => o.value === ticket.status)?.label}
-                  </span>
-                </div>
-              )}
-            </div>
+                {/* Right Column - Metadata Sidebar */}
+                <div className="w-80 flex-shrink-0 space-y-4">
+                  <StatusSection />
+                  <PrioritySection />
+                  <ProjectSection />
+                  <TeamSection />
+                  <DueDateSection />
+                  <LabelsSection />
 
-            {/* Priority */}
-            <div className="bg-[#1f1f23] rounded-lg p-4">
-              <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-                <Flag className="w-3 h-3" />
-                Priority
-              </div>
-              {isEditing ? (
-                <select
-                  value={priority as string}
-                  onChange={(e) => setPriority(e.target.value as TicketPriority)}
-                  className="w-full bg-[#27272a] border border-[#3f3f46] rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500"
-                >
-                  {TICKET_PRIORITY_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <span
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: PRIORITY_COLORS[ticket.priority as TicketPriority] || PRIORITY_COLORS[TicketPriority.NO_PRIORITY] }}
-                  />
-                  <span className="text-sm text-white">
-                    {TICKET_PRIORITY_OPTIONS.find((o) => o.value === ticket.priority)?.label || 'No Priority'}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Project */}
-            <div className="bg-[#1f1f23] rounded-lg p-4">
-              <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-                <FolderKanban className="w-3 h-3" />
-                Project
-              </div>
-              {project && (
-                <div className="flex items-center gap-2">
-                  <span
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: project.color as string }}
-                  />
-                  <span className="text-sm text-white">{project.name}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Team */}
-            <div className="bg-[#1f1f23] rounded-lg p-4">
-              <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-                <Users className="w-3 h-3" />
-                Team
-              </div>
-              {isEditing ? (
-                <select
-                  value={teamId}
-                  onChange={(e) => setTeamId(e.target.value)}
-                  className="w-full bg-[#27272a] border border-[#3f3f46] rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500"
-                >
-                  <option value="">No team</option>
-                  {teams.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              ) : team ? (
-                <div className="flex items-center gap-2">
-                  <span
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: team.color as string }}
-                  />
-                  <span className="text-sm text-white">{team.name}</span>
-                </div>
-              ) : (
-                <span className="text-sm text-gray-500">No team assigned</span>
-              )}
-            </div>
-          </div>
-
-          {/* Due Date */}
-          <div className="bg-[#1f1f23] rounded-lg p-4 mb-6">
-            <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-              <Calendar className="w-3 h-3" />
-              Due Date
-            </div>
-            {isEditing ? (
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="bg-[#27272a] border border-[#3f3f46] rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500"
-              />
-            ) : ticket.dueDate ? (
-              <span className="text-sm text-white">{formatRelativeDate(ticket.dueDate)}</span>
-            ) : (
-              <span className="text-sm text-gray-500">No due date</span>
-            )}
-          </div>
-
-          {/* Blocked By */}
-          <div className="bg-[#1f1f23] rounded-lg p-4 mb-6">
-            <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-              <Ban className="w-3 h-3" />
-              Blocked By
-            </div>
-            <div className="space-y-2 mb-2">
-              {isEditing ? (
-                // Edit mode: show selected blockers with remove option
-                blockedByIds.map((blockerId) => {
-                  const blocker = (allTickets || []).find(t => t.id === blockerId)
-                  if (!blocker) return null
-                  const blockerProject = typeof blocker.project === 'object' ? blocker.project : null
-                  return (
-                    <div
-                      key={blockerId}
-                      className="flex items-center gap-2 p-2 bg-[#27272a] rounded-md"
-                    >
-                      <Ban className="w-4 h-4 text-amber-500" />
-                      <span
-                        className="text-xs font-medium px-1.5 py-0.5 rounded"
-                        style={{
-                          backgroundColor: blockerProject ? `${blockerProject.color}20` : '#27272a',
-                          color: blockerProject?.color as string || '#888',
-                        }}
-                      >
-                        {blocker.ticketId}
-                      </span>
-                      <span className={`flex-1 text-sm ${blocker.status === 'DONE' ? 'text-gray-500 line-through' : 'text-white'}`}>
-                        {blocker.title}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeBlocker(blockerId)}
-                        className="text-gray-400 hover:text-red-400 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                  {/* Timestamps */}
+                  <div className="bg-[#1f1f23] rounded-lg p-4 text-xs text-gray-500">
+                    <div className="space-y-1">
+                      <div>Created {formatDate(ticket.createdAt)}</div>
+                      <div>Updated {formatDate(ticket.updatedAt)}</div>
                     </div>
-                  )
-                })
-              ) : (
-                // View mode: show blocking tickets
-                blockingTickets.length > 0 ? (
-                  blockingTickets.map((blocker) => {
-                    const blockerProject = typeof blocker.project === 'object' ? blocker.project : null
-                    return (
-                      <div
-                        key={blocker.id}
-                        className="flex items-center gap-2 p-2 bg-[#27272a] rounded-md"
-                      >
-                        <Ban className={`w-4 h-4 ${blocker.status === 'DONE' ? 'text-green-500' : 'text-amber-500'}`} />
-                        <span
-                          className="text-xs font-medium px-1.5 py-0.5 rounded"
-                          style={{
-                            backgroundColor: blockerProject ? `${blockerProject.color}20` : '#27272a',
-                            color: blockerProject?.color as string || '#888',
-                          }}
-                        >
-                          {blocker.ticketId}
-                        </span>
-                        <span className={`flex-1 text-sm ${blocker.status === 'DONE' ? 'text-gray-500 line-through' : 'text-white'}`}>
-                          {blocker.title}
-                        </span>
-                        <span className={`text-xs px-2 py-0.5 rounded ${blocker.status === 'DONE' ? 'bg-green-500/20 text-green-400' : 'bg-amber-500/20 text-amber-400'}`}>
-                          {blocker.status === 'DONE' ? 'Done' : 'Pending'}
-                        </span>
-                      </div>
-                    )
-                  })
-                ) : (
-                  <span className="text-sm text-gray-500">No blockers</span>
-                )
-              )}
-            </div>
-            {isEditing && availableTickets.length > 0 && (
-              <select
-                onChange={(e) => {
-                  if (e.target.value) {
-                    addBlocker(e.target.value)
-                    e.target.value = ''
-                  }
-                }}
-                className="w-full bg-[#27272a] border border-[#3f3f46] rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500"
-                defaultValue=""
-              >
-                <option value="">Add a blocking ticket...</option>
-                {availableTickets.map((t) => {
-                  const tProject = typeof t.project === 'object' ? t.project : null
-                  return (
-                    <option key={t.id} value={t.id}>
-                      {t.ticketId} - {t.title} {tProject ? `(${tProject.name})` : ''}
-                    </option>
-                  )
-                })}
-              </select>
-            )}
-          </div>
-
-          {/* Blocks (tickets blocked by this ticket) */}
-          <div className="bg-[#1f1f23] rounded-lg p-4 mb-6">
-            <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-              <Ban className="w-3 h-3 rotate-180" />
-              Blocks
-            </div>
-            <div className="space-y-2">
-              {blockedTickets.length > 0 ? (
-                blockedTickets.map((blocked) => {
-                  const blockedProject = typeof blocked.project === 'object' ? blocked.project : null
-                  return (
-                    <div
-                      key={blocked.id}
-                      className="flex items-center gap-2 p-2 bg-[#27272a] rounded-md"
-                    >
-                      <Ban className={`w-4 h-4 ${blocked.status === 'DONE' ? 'text-green-500' : 'text-red-500'}`} />
-                      <span
-                        className="text-xs font-medium px-1.5 py-0.5 rounded"
-                        style={{
-                          backgroundColor: blockedProject ? `${blockedProject.color}20` : '#27272a',
-                          color: blockedProject?.color as string || '#888',
-                        }}
-                      >
-                        {blocked.ticketId}
-                      </span>
-                      <span className={`flex-1 text-sm ${blocked.status === 'DONE' ? 'text-gray-500 line-through' : 'text-white'}`}>
-                        {blocked.title}
-                      </span>
-                      <span className={`text-xs px-2 py-0.5 rounded ${blocked.status === 'DONE' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                        {blocked.status === 'DONE' ? 'Done' : 'Waiting'}
-                      </span>
-                    </div>
-                  )
-                })
-              ) : (
-                <span className="text-sm text-gray-500">This ticket doesn&apos;t block any other tickets</span>
-              )}
-            </div>
-          </div>
-
-          {/* Dependency Graph */}
-          {!isEditing && (blockingTickets.length > 0 || blockedTickets.length > 0) && (
-            <div className="bg-[#1f1f23] rounded-lg p-4 mb-6">
-              <button
-                onClick={() => setShowDependencyGraph(!showDependencyGraph)}
-                className="flex items-center justify-between w-full text-left"
-              >
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <GitBranch className="w-3 h-3" />
-                  Dependency Graph
+                  </div>
                 </div>
-                {showDependencyGraph ? (
-                  <ChevronUp className="w-4 h-4 text-gray-500" />
-                ) : (
-                  <ChevronDown className="w-4 h-4 text-gray-500" />
-                )}
-              </button>
-              {showDependencyGraph && (
-                <div className="mt-3">
-                  <DependencyGraph
-                    ticket={ticket}
-                    allTickets={allTickets}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Labels */}
-          <div className="bg-[#1f1f23] rounded-lg p-4 mb-6">
-            <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-              <Tag className="w-3 h-3" />
-              Labels
-            </div>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {labels.map((label, index) => (
-                <span
-                  key={index}
-                  className="flex items-center gap-1 text-xs px-2 py-1 rounded"
-                  style={{
-                    backgroundColor: `${label.color}20`,
-                    color: label.color as string,
-                  }}
-                >
-                  {label.name}
-                  {isEditing && (
-                    <button
-                      onClick={() => removeLabel(index)}
-                      className="hover:opacity-70"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  )}
-                </span>
-              ))}
-              {labels.length === 0 && !isEditing && (
-                <span className="text-sm text-gray-500">No labels</span>
-              )}
-            </div>
-            {isEditing && (
-              <div className="flex gap-2 mt-2">
-                <input
-                  type="text"
-                  value={newLabelName}
-                  onChange={(e) => setNewLabelName(e.target.value)}
-                  placeholder="Label name"
-                  className="flex-1 bg-[#27272a] border border-[#3f3f46] rounded-md px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
-                />
-                <input
-                  type="color"
-                  value={newLabelColor}
-                  onChange={(e) => setNewLabelColor(e.target.value)}
-                  className="w-10 h-8 bg-[#27272a] border border-[#3f3f46] rounded cursor-pointer"
-                />
-                <button
-                  type="button"
-                  onClick={addLabel}
-                  className="p-2 bg-[#27272a] hover:bg-[#3f3f46] rounded-md transition-colors"
-                >
-                  <Plus className="w-4 h-4 text-white" />
-                </button>
               </div>
-            )}
-          </div>
+            ) : (
+              /* Normal: Single-column layout */
+              <>
+                <TitleSection />
+                <DescriptionSection />
+                <SubtasksSection />
 
-          {/* Timestamps */}
-          <div className="border-t border-[#27272a] pt-4 text-xs text-gray-500">
-            <div className="flex justify-between">
-              <span>Created {formatDate(ticket.createdAt)}</span>
-              <span>Updated {formatDate(ticket.updatedAt)}</span>
-            </div>
+                {/* Meta Grid */}
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <StatusSection />
+                  <PrioritySection />
+                  <ProjectSection />
+                  <TeamSection />
+                </div>
+
+                <div className="mb-6">
+                  <DueDateSection />
+                </div>
+
+                <div className="mb-6">
+                  <BlockedBySection />
+                </div>
+
+                <div className="mb-6">
+                  <BlocksSection />
+                </div>
+
+                <div className="mb-6">
+                  <DependencyGraphSection />
+                </div>
+
+                <div className="mb-6">
+                  <LabelsSection />
+                </div>
+
+                {/* Timestamps */}
+                <div className="border-t border-[#27272a] pt-4 text-xs text-gray-500">
+                  <div className="flex justify-between">
+                    <span>Created {formatDate(ticket.createdAt)}</span>
+                    <span>Updated {formatDate(ticket.updatedAt)}</span>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

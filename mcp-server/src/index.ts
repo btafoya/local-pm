@@ -31,6 +31,50 @@ function toPayloadValue(value: string | undefined): string | undefined {
   return STATUS_MAP[value] || value;
 }
 
+// Pagination response interface for AI-friendly output
+interface PaginatedResponse<T> {
+  items: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    totalItems: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+    nextPage: number | null;
+    prevPage: number | null;
+  };
+}
+
+// Helper to format paginated responses in an AI-friendly way
+function formatPaginatedResponse<T>(
+  response: {
+    docs: T[];
+    totalDocs: number;
+    limit: number;
+    totalPages: number;
+    page: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+    nextPage?: number | null;
+    prevPage?: number | null;
+  }
+): PaginatedResponse<T> {
+  return {
+    items: response.docs,
+    pagination: {
+      page: response.page,
+      limit: response.limit,
+      totalItems: response.totalDocs,
+      totalPages: response.totalPages,
+      hasNextPage: response.hasNextPage,
+      hasPrevPage: response.hasPrevPage,
+      nextPage: response.hasNextPage ? response.page + 1 : null,
+      prevPage: response.hasPrevPage ? response.page - 1 : null,
+    },
+  };
+}
+
 // Helper function to make API requests
 async function apiRequest(
   endpoint: string,
@@ -75,7 +119,11 @@ const tools: Tool[] = [
         },
         limit: {
           type: 'number',
-          description: 'Maximum number of projects to return (default: 100)',
+          description: 'Maximum number of projects to return (default: 20)',
+        },
+        page: {
+          type: 'number',
+          description: 'Page number for pagination (1-indexed, default: 1). Use with limit to paginate through results.',
         },
       },
     },
@@ -196,7 +244,11 @@ const tools: Tool[] = [
       properties: {
         limit: {
           type: 'number',
-          description: 'Maximum number of teams to return (default: 100)',
+          description: 'Maximum number of teams to return (default: 20)',
+        },
+        page: {
+          type: 'number',
+          description: 'Page number for pagination (1-indexed, default: 1). Use with limit to paginate through results.',
         },
       },
     },
@@ -282,7 +334,7 @@ const tools: Tool[] = [
   // ============== TICKETS ==============
   {
     name: 'list_tickets',
-    description: 'List tickets in Local PM with optional filters',
+    description: 'List tickets in Local PM with optional filters. By default returns only basic fields (id, title, status, project). Use "include" to request additional fields.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -306,7 +358,19 @@ const tools: Tool[] = [
         },
         limit: {
           type: 'number',
-          description: 'Maximum number of tickets to return (default: 100)',
+          description: 'Maximum number of tickets to return (default: 20)',
+        },
+        page: {
+          type: 'number',
+          description: 'Page number for pagination (1-indexed, default: 1). Use with limit to paginate through results.',
+        },
+        include: {
+          type: 'array',
+          description: 'Additional fields to include in the response. By default only id, title, status, and project are returned.',
+          items: {
+            type: 'string',
+            enum: ['description', 'team', 'priority', 'dueDate', 'labels', 'subtasks', 'blockedBy', 'sortOrder', 'createdAt', 'updatedAt'],
+          },
         },
       },
     },
@@ -506,7 +570,7 @@ const tools: Tool[] = [
   // ============== BOARD ==============
   {
     name: 'get_board',
-    description: 'Get the full Kanban board with tickets grouped by status. Optionally filter by project or team.',
+    description: 'Get the full Kanban board with tickets grouped by status. Optionally filter by project or team. By default returns only basic ticket fields (id, title, status, project). Use "include" to request additional fields.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -517,6 +581,14 @@ const tools: Tool[] = [
         teamId: {
           type: 'string',
           description: 'Filter by team ID',
+        },
+        include: {
+          type: 'array',
+          description: 'Additional ticket fields to include. By default only id, title, status, and project are returned.',
+          items: {
+            type: 'string',
+            enum: ['description', 'team', 'priority', 'dueDate', 'labels', 'subtasks', 'blockedBy', 'sortOrder', 'createdAt', 'updatedAt'],
+          },
         },
       },
     },
@@ -569,11 +641,24 @@ async function handleToolCall(
   switch (name) {
     // Projects
     case 'list_projects': {
-      let query = `?limit=${args.limit || 100}&depth=0`;
+      const limit = (args.limit as number) || 20;
+      const page = (args.page as number) || 1;
+      let query = `?limit=${limit}&page=${page}&depth=0`;
       if (args.status) {
         query += `&where[status][equals]=${toPayloadValue(args.status as string)}`;
       }
-      return apiRequest(`/projects${query}`);
+      const response = await apiRequest(`/projects${query}`) as {
+        docs: unknown[];
+        totalDocs: number;
+        limit: number;
+        totalPages: number;
+        page: number;
+        hasNextPage: boolean;
+        hasPrevPage: boolean;
+        nextPage?: number | null;
+        prevPage?: number | null;
+      };
+      return formatPaginatedResponse(response);
     }
     case 'get_project': {
       return apiRequest(`/projects/${args.id}?depth=1`);
@@ -615,8 +700,21 @@ async function handleToolCall(
 
     // Teams
     case 'list_teams': {
-      const query = `?limit=${args.limit || 100}&depth=0`;
-      return apiRequest(`/teams${query}`);
+      const limit = (args.limit as number) || 20;
+      const page = (args.page as number) || 1;
+      const query = `?limit=${limit}&page=${page}&depth=0`;
+      const response = await apiRequest(`/teams${query}`) as {
+        docs: unknown[];
+        totalDocs: number;
+        limit: number;
+        totalPages: number;
+        page: number;
+        hasNextPage: boolean;
+        hasPrevPage: boolean;
+        nextPage?: number | null;
+        prevPage?: number | null;
+      };
+      return formatPaginatedResponse(response);
     }
     case 'get_team': {
       return apiRequest(`/teams/${args.id}?depth=1`);
@@ -638,7 +736,11 @@ async function handleToolCall(
 
     // Tickets
     case 'list_tickets': {
-      let query = `?limit=${args.limit || 100}&depth=1`;
+      const limit = (args.limit as number) || 20;
+      const page = (args.page as number) || 1;
+      const includeFields = (args.include as string[]) || [];
+
+      let query = `?limit=${limit}&page=${page}&depth=1`;
       if (args.projectId) {
         query += `&where[project][equals]=${args.projectId}`;
       }
@@ -651,7 +753,41 @@ async function handleToolCall(
       if (args.priority) {
         query += `&where[priority][equals]=${toPayloadValue(args.priority as string)}`;
       }
-      return apiRequest(`/tickets${query}`);
+      const response = await apiRequest(`/tickets${query}`) as {
+        docs: Array<Record<string, unknown>>;
+        totalDocs: number;
+        limit: number;
+        totalPages: number;
+        page: number;
+        hasNextPage: boolean;
+        hasPrevPage: boolean;
+        nextPage?: number | null;
+        prevPage?: number | null;
+      };
+
+      // Default fields always included
+      const defaultFields = ['id', 'title', 'status', 'project'];
+      // All optional fields that can be included
+      const optionalFields = ['description', 'team', 'priority', 'dueDate', 'labels', 'subtasks', 'blockedBy', 'sortOrder', 'createdAt', 'updatedAt'];
+
+      // Build the set of fields to include
+      const fieldsToInclude = new Set([...defaultFields, ...includeFields.filter(f => optionalFields.includes(f))]);
+
+      // Filter each ticket to only include requested fields
+      const filteredDocs = response.docs.map(ticket => {
+        const filtered: Record<string, unknown> = {};
+        for (const field of fieldsToInclude) {
+          if (field in ticket) {
+            filtered[field] = ticket[field];
+          }
+        }
+        return filtered;
+      });
+
+      return formatPaginatedResponse({
+        ...response,
+        docs: filteredDocs,
+      });
     }
     case 'get_ticket': {
       return apiRequest(`/tickets/${args.id}?depth=1`);
@@ -695,6 +831,8 @@ async function handleToolCall(
 
     // Board
     case 'get_board': {
+      const includeFields = (args.include as string[]) || [];
+
       let query = '?limit=1000&depth=1';
       if (args.projectId) {
         query += `&where[project][equals]=${args.projectId}`;
@@ -702,19 +840,38 @@ async function handleToolCall(
       if (args.teamId) {
         query += `&where[team][equals]=${args.teamId}`;
       }
-      const response = await apiRequest(`/tickets${query}`) as { docs: Array<{ status: string }> };
+      const response = await apiRequest(`/tickets${query}`) as { docs: Array<Record<string, unknown>> };
       const tickets = response.docs || [];
 
-      // Group by status
+      // Default fields always included
+      const defaultFields = ['id', 'title', 'status', 'project'];
+      // All optional fields that can be included
+      const optionalFields = ['description', 'team', 'priority', 'dueDate', 'labels', 'subtasks', 'blockedBy', 'sortOrder', 'createdAt', 'updatedAt'];
+
+      // Build the set of fields to include
+      const fieldsToInclude = new Set([...defaultFields, ...includeFields.filter(f => optionalFields.includes(f))]);
+
+      // Filter each ticket to only include requested fields
+      const filterTicket = (ticket: Record<string, unknown>) => {
+        const filtered: Record<string, unknown> = {};
+        for (const field of fieldsToInclude) {
+          if (field in ticket) {
+            filtered[field] = ticket[field];
+          }
+        }
+        return filtered;
+      };
+
+      // Group by status with filtered fields
       const board = {
-        todo: tickets.filter((t) => t.status === 'todo'),
-        in_progress: tickets.filter((t) => t.status === 'in_progress'),
-        done: tickets.filter((t) => t.status === 'done'),
+        todo: tickets.filter((t) => t.status === 'TODO').map(filterTicket),
+        in_progress: tickets.filter((t) => t.status === 'IN_PROGRESS').map(filterTicket),
+        done: tickets.filter((t) => t.status === 'DONE').map(filterTicket),
         summary: {
           total: tickets.length,
-          todo: tickets.filter((t) => t.status === 'todo').length,
-          inProgress: tickets.filter((t) => t.status === 'in_progress').length,
-          done: tickets.filter((t) => t.status === 'done').length,
+          todo: tickets.filter((t) => t.status === 'TODO').length,
+          inProgress: tickets.filter((t) => t.status === 'IN_PROGRESS').length,
+          done: tickets.filter((t) => t.status === 'DONE').length,
         },
       };
       return board;
