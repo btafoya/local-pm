@@ -50,7 +50,7 @@ export function useInfiniteScroll(
       },
       {
         rootMargin,
-        threshold: 0,
+        threshold,
       }
     )
 
@@ -59,7 +59,7 @@ export function useInfiniteScroll(
     return () => {
       observer.disconnect()
     }
-  }, [handleLoadMore, hasMore, rootMargin])
+  }, [handleLoadMore, hasMore, rootMargin, threshold])
 
   return {
     sentinelRef,

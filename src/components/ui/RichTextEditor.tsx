@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { useMemo } from 'react'
+import DOMPurify from 'dompurify'
 import 'react-quill-new/dist/quill.snow.css'
 
 const ReactQuill = dynamic(() => import('react-quill-new'), {
@@ -69,10 +70,16 @@ export function RichTextDisplay({ content }: { content: string }) {
     return <p className="text-sm text-muted-foreground italic">No description</p>
   }
 
+  // Sanitize HTML to prevent XSS attacks
+  const sanitizedContent = DOMPurify.sanitize(content, {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 's', 'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3'],
+    ALLOWED_ATTR: ['href', 'target', 'rel'],
+  })
+
   return (
     <div
       className="rich-text-content"
-      dangerouslySetInnerHTML={{ __html: content }}
+      dangerouslySetInnerHTML={{ __html: sanitizedContent }}
     />
   )
 }

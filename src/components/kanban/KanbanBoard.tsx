@@ -142,7 +142,6 @@ export function KanbanBoard({ initialTickets, projects, teams, initialColumnPagi
     [TicketStatus.IN_PROGRESS]: false,
     [TicketStatus.DONE]: false,
   })
-  const [isRefetching, setIsRefetching] = useState(false)
 
   // Track if this is the initial mount to avoid refetching on first render
   const isInitialMount = useRef(true)
@@ -155,7 +154,6 @@ export function KanbanBoard({ initialTickets, projects, teams, initialColumnPagi
     }
 
     const refetchTickets = async () => {
-      setIsRefetching(true)
       try {
         // Fetch all three columns in parallel
         const fetchColumn = async (status: TicketStatus) => {
@@ -210,8 +208,6 @@ export function KanbanBoard({ initialTickets, projects, teams, initialColumnPagi
         })
       } catch (error) {
         console.error('Failed to refetch tickets:', error)
-      } finally {
-        setIsRefetching(false)
       }
     }
 

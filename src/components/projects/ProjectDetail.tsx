@@ -9,9 +9,8 @@ import {
   Save,
   X,
   Calendar,
-  Hash,
-  FolderKanban,
-} from 'lucide-react'
+  Hash
+} from 'lucide-react';
 import { RichTextEditor } from '@/components/ui/RichTextEditor'
 import { ProjectStatus, PROJECT_STATUS_OPTIONS, PROJECT_COLORS, PROJECT_ICONS, TicketStatus } from '@/types/enums'
 import type { Project, Ticket, Team } from '@/payload-types'

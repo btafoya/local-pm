@@ -50,7 +50,7 @@ A lightweight, self-hosted project management tool with a built-in MCP (Model Co
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/your-username/local-pm.git
+git clone https://github.com/btafoya/local-pm.git
 cd local-pm
 ```
 
@@ -65,7 +65,7 @@ docker-compose up -d
 
 1. Clone the repository and install dependencies:
 ```bash
-git clone https://github.com/your-username/local-pm.git
+git clone https://github.com/btafoya/local-pm.git
 cd local-pm
 npm install
 ```
